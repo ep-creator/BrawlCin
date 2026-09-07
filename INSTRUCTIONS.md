@@ -112,6 +112,13 @@ estado inicial e os ajustes ficam em `brawl/config/depuracao.py`.
 - [ ] **Transições entre cenas** — menu → seleção e seleção → partida entram
       secas. A sugestão é implementá-las no App, que já é o único dono das
       trocas, em vez de como cena intermediária.
+- [ ] **Revisão estética dos menus** — combinado. Menu principal, pausa, fim de
+      jogo, confirmação e tela de controles nasceram funcionais, com layout
+      medido a régua mas sem identidade visual própria: fonte, cores e
+      espaçamentos foram escolhidos para caber e ler bem, não para compor. Vale
+      olhar os cinco juntos, decidir uma linguagem comum (cores, moldura dos
+      itens, destaque da seleção, ritmo vertical) e aplicar. As prévias em
+      `docs/` servem de ponto de partida para comparar antes e depois.
 - [ ] Melhorar o placar.
 - [ ] HUD: melhorar a vida; trocar o texto dos bônus por ícone com contagem.
       Hoje usa fontes de 12 a 20 px herdadas de uma janela bem menor, desenhadas
