@@ -67,8 +67,20 @@ class Desempilhar:
 
 
 @dataclass(frozen=True)
+class SubstituirPilha:
+    """Descarta a pilha inteira e recomeça com esta cena.
+
+    `Trocar` substitui só o topo, o que não serve para "voltar ao menu" pedido
+    de dentro de uma sobreposição: trocaria a própria sobreposição e deixaria a
+    partida viva embaixo. Aqui não sobra nada.
+    """
+
+    cena: Cena
+
+
+@dataclass(frozen=True)
 class Sair:
     """Encerra o jogo."""
 
 
-Transicao = Empilhar | Trocar | Desempilhar | Sair
+Transicao = Empilhar | Trocar | Desempilhar | SubstituirPilha | Sair

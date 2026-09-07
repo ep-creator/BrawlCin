@@ -6,7 +6,14 @@ import pygame
 import pytest
 
 from brawl.cenas.abertura import CenaAbertura, _Etapa
-from brawl.cenas.base import Cena, Desempilhar, Empilhar, Sair, Trocar
+from brawl.cenas.base import (
+    Cena,
+    Desempilhar,
+    Empilhar,
+    Sair,
+    SubstituirPilha,
+    Trocar,
+)
 from brawl.cenas.controles import CenaControles, nome_da_tecla
 from brawl.cenas.menu import CenaMenu
 from brawl.cenas.partida import CenaPartida
@@ -50,6 +57,24 @@ class TestPilha:
         app.pilha = [base, veu]
         app._aplicar(Desempilhar())
         assert app.pilha == [base]
+
+    def test_substituir_pilha_descarta_tudo(self, app):
+        """`Trocar` só troca o topo. Para "voltar ao menu" pedido de dentro de
+        uma sobreposição, é preciso descartar também o que está embaixo."""
+        base, veu, nova = CenaBoba("base"), CenaBoba("veu"), CenaBoba("nova")
+        app.pilha = [base, veu]
+        app._aplicar(SubstituirPilha(nova))
+        assert app.pilha == [nova]
+
+    def test_substituir_pilha_com_um_so_elemento(self, app):
+        base, nova = CenaBoba("base"), CenaBoba("nova")
+        app.pilha = [base]
+        app._aplicar(SubstituirPilha(nova))
+        assert app.pilha == [nova]
+
+    def test_substituir_pilha_nao_encerra_o_jogo(self, app):
+        app.pilha = [CenaBoba()]
+        assert app._aplicar(SubstituirPilha(CenaBoba("nova"))) is not False
 
     def test_sair_esvazia_e_encerra(self, app):
         app.pilha = [CenaBoba()]
@@ -164,14 +189,17 @@ class TestFimDeRodadaEDeJogo:
         assert partida.pontos == {1: 0, 2: 0}
 
     def test_t_volta_para_a_selecao_sem_empilhar_partida(self, app):
-        """A tecla T instanciava um Game dentro do laço de eventos do anterior."""
+        """A tecla T instanciava um Game dentro do laço de eventos do anterior.
+
+        Hoje o véu devolve SubstituirPilha, então a troca é imediata: um frame,
+        e nem o véu nem a partida sobram na pilha.
+        """
         partida = CenaPartida("shelly", "colt")
         app.pilha = [partida]
         for _ in range(regras.PONTOS_PARA_VENCER_CAMPEONATO):
             partida._pontuar(vencedor=1)
         avancar_frame(app)
         teclar(pygame.K_t)
-        avancar_frame(app)
         avancar_frame(app)
         assert isinstance(app.topo, CenaSelecao)
         assert len(app.pilha) == 1

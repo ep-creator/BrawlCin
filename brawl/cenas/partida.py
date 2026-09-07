@@ -22,7 +22,7 @@ from ..mundo.mapa import Mapa
 from ..mundo.personagem import PERSONAGENS
 from ..mundo.projetil import Projetil
 from ..render.camera import Camera
-from .base import Cena, Desempilhar, Empilhar, Transicao, Trocar
+from .base import Cena, Desempilhar, Empilhar, SubstituirPilha, Transicao
 from .sobreposicao import CenaSobreposicao
 
 COR_BALA_P1 = (0, 150, 255)
@@ -210,11 +210,11 @@ class CenaPartida(Cena):
             return Desempilhar()
 
         def nova_selecao() -> Transicao:
-            # Desempilha o véu e deixa a partida pedir a troca no frame
-            # seguinte. Antes, a tecla T instanciava um Game inteiro dentro do
-            # laço de eventos do Game anterior.
-            self._pedir_nova_selecao()
-            return Desempilhar()
+            from .selecao import CenaSelecao  # importado aqui para evitar ciclo
+
+            # SubstituirPilha e não Trocar: Trocar substituiria o próprio véu e
+            # deixaria a partida viva embaixo dele.
+            return SubstituirPilha(CenaSelecao())
 
         return CenaSobreposicao(
             titulo=f"PLAYER {vencedor} VENCEU O JOGO!",
@@ -228,11 +228,6 @@ class CenaPartida(Cena):
             ],
             acoes={pygame.K_r: reiniciar_campeonato, pygame.K_t: nova_selecao},
         )
-
-    def _pedir_nova_selecao(self) -> None:
-        from .selecao import CenaSelecao  # importado aqui para evitar ciclo
-
-        self._transicao_pendente = Trocar(CenaSelecao())
 
     def _reiniciar_rodada(self) -> None:
         self.jogador1.renascer()

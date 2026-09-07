@@ -4,7 +4,15 @@ from __future__ import annotations
 
 import pygame
 
-from .cenas.base import Cena, Desempilhar, Empilhar, Sair, Transicao, Trocar
+from .cenas.base import (
+    Cena,
+    Desempilhar,
+    Empilhar,
+    Sair,
+    SubstituirPilha,
+    Transicao,
+    Trocar,
+)
 from .config import tela as config_tela
 
 
@@ -74,6 +82,8 @@ class App:
                 self.pilha.append(cena)
             case Trocar(cena):
                 self.pilha[-1] = cena
+            case SubstituirPilha(cena):
+                self.pilha = [cena]
             case Desempilhar():
                 self.pilha.pop()
         return True
