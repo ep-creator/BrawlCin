@@ -36,13 +36,17 @@
 
 ## Pendências
 
-- [ ] Mapa (791x500) é desenhado sem escala numa janela de 1920x1080
 - [ ] Melhorar o placar
 - [ ] HUD: melhorar a vida; trocar o texto dos bônus de velocidade e dano por ícone com contagem
 - [ ] Redesenhar as telas de vitória de rodada e de jogo
 - [ ] Avaliar mais vida para alongar a batalha
 - [ ] Redesenhar a tela de seleção
 
-A velocidade da diagonal foi corrigida: a direção agora é normalizada em
-`brawl/entrada.py`. O plano que endereça o item do mapa está em `design-alvo.md`
-(no projeto do Claude), passo 4.
+O mundo agora é desenhado numa superfície do tamanho nativo do mapa e escalado
+uma vez por frame para a janela (`brawl/render/camera.py`). O mapa atual
+(791x500) fica com barras de 106 px nas laterais; quando ele for refeito em
+960x540 a escala dá inteira (x2) e preenche a tela sem barras.
+
+Em aberto e já diagnosticado: a `hitbox_entidade` tem largura negativa
+(40 - 53 = -13), o que deixa a hitbox efetiva em 13x30 e quebra a regra de
+50% de cobertura dos arbustos.

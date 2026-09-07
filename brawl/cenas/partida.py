@@ -14,13 +14,13 @@ import pygame
 
 from .. import recursos
 from ..config import gameplay as regras
-from ..config import tela as config_tela
 from ..entrada import Comando, TECLADO_P1, TECLADO_P2
 from ..mundo.item import Item
 from ..mundo.jogador import Jogador1, Jogador2
 from ..mundo.mapa import Mapa
 from ..mundo.personagem import PERSONAGENS
 from ..mundo.projetil import Projetil
+from ..render.camera import Camera
 from .base import Cena, Desempilhar, Empilhar, Transicao, Trocar
 from .sobreposicao import CenaSobreposicao
 
@@ -36,6 +36,10 @@ COR_TITULO_JOGO = (0, 255, 128)
 class CenaPartida(Cena):
     def __init__(self, chave_p1: str, chave_p2: str):
         self.mapa = Mapa()
+
+        # O mundo é desenhado no tamanho nativo do mapa e escalado uma vez por
+        # frame. Nenhuma coordenada de gameplay conhece a resolução da janela.
+        self.camera = Camera(self.mapa.tamanho)
         self.jogador1 = Jogador1(*regras.SPAWN_JOGADOR_1, personagem=PERSONAGENS[chave_p1])
         self.jogador2 = Jogador2(*regras.SPAWN_JOGADOR_2, personagem=PERSONAGENS[chave_p2])
 
@@ -68,8 +72,8 @@ class CenaPartida(Cena):
 
         for _ in range(regras.ITEM_TENTATIVAS_SPAWN):
             candidato = Item(
-                random.randint(margem, config_tela.LARGURA - margem),
-                random.randint(margem, config_tela.ALTURA - margem),
+                random.randint(margem, self.mapa.rect.width - margem - regras.ITEM_TAMANHO),
+                random.randint(margem, self.mapa.rect.height - margem - regras.ITEM_TAMANHO),
                 tipo,
             )
             atrapalha = (
@@ -139,7 +143,7 @@ class CenaPartida(Cena):
         if bala.passou_do_alcance:
             return True
 
-        if not (0 <= bala.x <= config_tela.LARGURA and 0 <= bala.y <= config_tela.ALTURA):
+        if not self.mapa.rect.collidepoint(int(bala.x), int(bala.y)):
             return True
 
         if bala.rect.collidelist(self.mapa.paredes) != -1:
@@ -294,25 +298,33 @@ class CenaPartida(Cena):
     # ----------------------------------------------------------------- desenho
 
     def desenhar(self, superficie: pygame.Surface) -> None:
-        superficie.fill((30, 30, 30))
-        self.mapa.desenhar(superficie)
+        self._desenhar_mundo(self.camera.mundo)
+        area = self.camera.apresentar(superficie)
+        self._desenhar_hud(superficie, area)
+
+    def _desenhar_mundo(self, mundo: pygame.Surface) -> None:
+        """Tudo que vive em coordenadas de mapa."""
+        self.mapa.desenhar(mundo)
 
         for item in self.itens:
-            item.desenhar(superficie)
+            item.desenhar(mundo)
 
-        self.jogador1.desenhar(superficie)
-        self.jogador2.desenhar(superficie)
+        self.jogador1.desenhar(mundo)
+        self.jogador2.desenhar(mundo)
 
         for bala in self.balas:
-            bala.desenhar(superficie)
+            bala.desenhar(mundo)
 
-        self.jogador1.desenhar_hud(superficie, 10, 10)
-        self.jogador2.desenhar_hud(superficie, config_tela.LARGURA - 130, 10)
+    def _desenhar_hud(self, superficie: pygame.Surface, area: pygame.Rect) -> None:
+        """Desenhado depois da escala, em resolução cheia, para não borrar.
 
-        self._desenhar_placar(superficie)
+        Ancorado na área ocupada pelo mundo e não na janela, para o HUD ficar
+        colado no campo de jogo mesmo quando sobram barras nas laterais.
+        """
+        self.jogador1.desenhar_hud(superficie, area.left + 10, area.top + 10)
+        self.jogador2.desenhar_hud(superficie, area.right - 140, area.top + 10)
 
-    def _desenhar_placar(self, superficie: pygame.Surface) -> None:
         texto = recursos.fonte(32, negrito=True).render(
             f"{self.pontos[1]}  X  {self.pontos[2]}", True, (255, 215, 0)
         )
-        superficie.blit(texto, ((config_tela.LARGURA - texto.get_width()) // 2, 10))
+        superficie.blit(texto, (area.centerx - texto.get_width() // 2, area.top + 10))
