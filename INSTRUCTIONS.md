@@ -55,10 +55,13 @@ pesada. Vale rodá-la sempre que a hitbox dos pés, o mapa ou os spawns mudarem:
 - [ ] Avaliar mais vida para alongar a batalha
 - [ ] Redesenhar a tela de seleção
 
-O mundo agora é desenhado numa superfície do tamanho nativo do mapa e escalado
-uma vez por frame para a janela (`brawl/render/camera.py`). O mapa atual
-(791x500) fica com barras de 106 px nas laterais; quando ele for refeito em
-960x540 a escala dá inteira (x2) e preenche a tela sem barras.
+O mapa é 960x540 e o mundo é desenhado numa superfície desse tamanho, escalada
+uma vez por frame para a janela (`brawl/render/camera.py`). A escala dá x2
+exata em 1920x1080, sem barras.
+
+O mapa vive em `assets/mapa.tmx` e é editado no Tiled. Desenho e colisão saem
+das mesmas camadas: `agua` bloqueia, `grama` esconde, e `parede` bloqueia
+quando existir. Mover a água no Tiled move a colisão junto.
 
 As hitboxes passaram a ser definidas por tamanho absoluto (corpo 24x40, pés
 16x12), ancoradas nos pés do sprite, e a borda do mapa passou a bloquear por

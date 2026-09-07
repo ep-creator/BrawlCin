@@ -1,11 +1,11 @@
-"""Mapa: carga do .tmx e as áreas de regra."""
+"""Mapa: carga do .tmx, desenho achatado e colisão vinda das camadas."""
 
 from __future__ import annotations
 
 import pygame
 import pytest
 
-from brawl.mundo.mapa import Mapa
+from brawl.mundo.mapa import CAMADA_AGUA, CAMADA_VEGETACAO, Mapa
 
 
 @pytest.fixture(scope="module")
@@ -14,25 +14,120 @@ def mapa():
 
 
 class TestCarga:
-    def test_o_fundo_vem_do_proprio_tmx(self, mapa):
-        """O caminho da imagem não é repetido no código: o .tmx já o declara."""
-        assert isinstance(mapa.imagem, pygame.Surface)
-
-    def test_expoe_o_tamanho_do_mundo(self, mapa):
-        assert mapa.tamanho == mapa.imagem.get_size()
+    def test_o_mundo_tem_o_tamanho_declarado_no_tmx(self, mapa):
+        esperado = (
+            mapa.tmx.width * mapa.tmx.tilewidth,
+            mapa.tmx.height * mapa.tmx.tileheight,
+        )
+        assert mapa.tamanho == esperado
         assert mapa.rect.size == mapa.tamanho
 
-    def test_carrega_as_tres_areas_de_regra(self, mapa):
-        assert mapa.paredes and mapa.aguas and mapa.arbustos
-        for area in (*mapa.paredes, *mapa.aguas, *mapa.arbustos):
-            assert isinstance(area, pygame.Rect)
+    def test_o_mundo_e_16_por_9(self, mapa):
+        """É o que faz a escala dar inteira em 1920x1080."""
+        largura, altura = mapa.tamanho
+        assert largura / altura == pytest.approx(16 / 9)
 
-    def test_desenha_a_partir_da_origem(self, mapa):
+    def test_as_camadas_sao_achatadas_numa_imagem_so(self, mapa):
+        """Uma superfície pronta na carga, em vez de ~1.900 blits por frame."""
+        assert isinstance(mapa.imagem, pygame.Surface)
+        assert mapa.imagem.get_size() == mapa.tamanho
+
+    def test_o_desenho_cobre_o_mundo_inteiro(self, mapa):
+        """A camada de chão preenche 100% das células; nada fica no vazio."""
         superficie = pygame.Surface(mapa.tamanho)
-        superficie.fill((0, 0, 0))
+        superficie.fill((255, 0, 255))
         mapa.desenhar(superficie)
-        assert pygame.transform.average_color(superficie)[:3] != (0, 0, 0)
+        cantos = [(0, 0), (mapa.rect.right - 1, 0),
+                  (0, mapa.rect.bottom - 1), (mapa.rect.right - 1, mapa.rect.bottom - 1)]
+        for ponto in cantos:
+            assert superficie.get_at(ponto)[:3] != (255, 0, 255)
 
     def test_arquivo_inexistente_falha_alto(self):
         with pytest.raises(Exception):
             Mapa("nao_existe.tmx")
+
+
+class TestColisaoVindaDasCamadas:
+    """Desenho e colisão saem das mesmas células.
+
+    Antes eram duas fontes: um PNG pintado à mão e retângulos desenhados à mão
+    na camada de objetos — 38 deles, nenhum alinhado a grade, um com tamanho 0x0.
+    """
+
+    def test_agua_e_vegetacao_viram_areas(self, mapa):
+        assert mapa.aguas
+        assert mapa.arbustos
+
+    def test_camada_ausente_vira_lista_vazia(self, mapa):
+        """O mapa ainda não tem paredes, e isso não pode ser um erro:
+        a borda do mundo é regra do jogador, não desenho do mapa."""
+        assert mapa.paredes == []
+
+    def test_as_areas_ficam_dentro_do_mundo(self, mapa):
+        for area in (*mapa.aguas, *mapa.arbustos):
+            assert mapa.rect.contains(area)
+
+    def test_as_areas_estao_alinhadas_a_grade(self, mapa):
+        """Vindo dos tiles, o desalinhamento do mapa antigo é impossível."""
+        largura, altura = mapa.tmx.tilewidth, mapa.tmx.tileheight
+        for area in (*mapa.aguas, *mapa.arbustos):
+            assert area.x % largura == 0 and area.y % altura == 0
+            assert area.width % largura == 0 and area.height % altura == 0
+
+    def test_nenhuma_area_degenerada(self, mapa):
+        """O mapa antigo tinha uma parede 0x0, um clique perdido no Tiled."""
+        for area in (*mapa.aguas, *mapa.arbustos):
+            assert area.width > 0 and area.height > 0
+
+
+class TestFusaoDeTiles:
+    """A fusão reduz a contagem sem mudar a geometria."""
+
+    @staticmethod
+    def _celulas_da_camada(mapa, nome):
+        camada = next(c for c in mapa.tmx.layers if c.name == nome)
+        return {(coluna, linha) for coluna, linha, _ in camada.tiles()}
+
+    @pytest.mark.parametrize("nome,atributo", [
+        (CAMADA_AGUA, "aguas"),
+        (CAMADA_VEGETACAO, "arbustos"),
+    ])
+    def test_a_area_total_e_preservada(self, mapa, nome, atributo):
+        celulas = self._celulas_da_camada(mapa, nome)
+        area_dos_tiles = len(celulas) * mapa.tmx.tilewidth * mapa.tmx.tileheight
+        area_fundida = sum(r.width * r.height for r in getattr(mapa, atributo))
+        assert area_fundida == area_dos_tiles
+
+    @pytest.mark.parametrize("atributo", ["aguas", "arbustos"])
+    def test_os_retangulos_nao_se_sobrepoem(self, mapa, atributo):
+        """Se houvesse sobreposição, a área bateria por acaso mas a fusão
+        estaria errada."""
+        areas = getattr(mapa, atributo)
+        for i, area in enumerate(areas):
+            assert area.collidelist(areas[i + 1:]) == -1
+
+    @pytest.mark.parametrize("nome,atributo", [
+        (CAMADA_AGUA, "aguas"),
+        (CAMADA_VEGETACAO, "arbustos"),
+    ])
+    def test_reduz_bastante_a_contagem(self, mapa, nome, atributo):
+        celulas = self._celulas_da_camada(mapa, nome)
+        assert len(getattr(mapa, atributo)) < len(celulas) / 2
+
+    @pytest.mark.parametrize("nome,atributo", [
+        (CAMADA_AGUA, "aguas"),
+        (CAMADA_VEGETACAO, "arbustos"),
+    ])
+    def test_cobre_exatamente_as_celulas_originais(self, mapa, nome, atributo):
+        """A prova que importa: cada célula da camada, e só elas, está coberta."""
+        largura, altura = mapa.tmx.tilewidth, mapa.tmx.tileheight
+        areas = getattr(mapa, atributo)
+        celulas = self._celulas_da_camada(mapa, nome)
+
+        cobertas = set()
+        for area in areas:
+            for coluna in range(area.left // largura, area.right // largura):
+                for linha in range(area.top // altura, area.bottom // altura):
+                    cobertas.add((coluna, linha))
+
+        assert cobertas == celulas
