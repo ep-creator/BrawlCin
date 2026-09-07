@@ -14,6 +14,7 @@ from .cenas.base import (
     Trocar,
 )
 from .config import tela as config_tela
+from .render.transicao import Esmaecimento
 
 
 class App:
@@ -29,6 +30,7 @@ class App:
         self.superficie = self._criar_janela()
         self.relogio = pygame.time.Clock()
         self.pilha: list[Cena] = []
+        self._esmaecimento: Esmaecimento | None = None
 
     @staticmethod
     def _criar_janela() -> pygame.Surface:
@@ -56,6 +58,7 @@ class App:
                 break
 
             self._desenhar()
+            self._desenhar_transicao(dt)
             pygame.display.flip()
 
     def _processar_eventos(self) -> bool:
@@ -81,12 +84,37 @@ class App:
             case Empilhar(cena):
                 self.pilha.append(cena)
             case Trocar(cena):
+                self._iniciar_transicao()
                 self.pilha[-1] = cena
             case SubstituirPilha(cena):
+                self._iniciar_transicao()
                 self.pilha = [cena]
             case Desempilhar():
                 self.pilha.pop()
         return True
+
+    def _iniciar_transicao(self) -> None:
+        """Guarda o quadro atual para ele esmaecer por cima da cena nova.
+
+        Só trocas de contexto entram aqui. Empilhar e Desempilhar são
+        sobreposições — a pausa abrindo com meio segundo de atraso seria pior
+        do que ela abrir seca.
+        """
+        if config_tela.DURACAO_DA_TRANSICAO <= 0:
+            return
+        self._esmaecimento = Esmaecimento(
+            self.superficie.copy(), config_tela.DURACAO_DA_TRANSICAO
+        )
+
+    def _desenhar_transicao(self, dt: float) -> None:
+        """A transição é puramente visual: a cena nova já está viva embaixo e
+        recebendo eventos, então nada fica travado durante o esmaecimento."""
+        if self._esmaecimento is None:
+            return
+        self._esmaecimento.desenhar(self.superficie)
+        self._esmaecimento.avancar(dt)
+        if self._esmaecimento.terminou:
+            self._esmaecimento = None
 
     def _desenhar(self) -> None:
         """Desenha da última cena opaca para cima.

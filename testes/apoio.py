@@ -62,4 +62,5 @@ def avancar_frame(app, dt: float = 1 / 30) -> bool:
     if not app._aplicar(app.topo.atualizar(dt)):
         return False
     app._desenhar()
+    app._desenhar_transicao(dt)
     return True

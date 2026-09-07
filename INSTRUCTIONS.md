@@ -109,9 +109,8 @@ estado inicial e os ajustes ficam em `brawl/config/depuracao.py`.
 - [ ] **Animação de vitória / fim de round**. O fim de campeonato já virou menu
       navegável (`cenas/fim_de_jogo.py`); falta a animação, e falta redesenhar o
       véu de fim de rodada, que continua sendo texto sobre véu.
-- [ ] **Transições entre cenas** — menu → seleção e seleção → partida entram
-      secas. A sugestão é implementá-las no App, que já é o único dono das
-      trocas, em vez de como cena intermediária.
+- [x] ~~**Transições entre cenas**~~ — feito. Esmaecimento de 0,3 s nas trocas
+      de contexto; sobreposições como a pausa continuam entrando secas.
 - [ ] **Revisão estética dos menus** — combinado. Menu principal, pausa, fim de
       jogo, confirmação e tela de controles nasceram funcionais, com layout
       medido a régua mas sem identidade visual própria: fonte, cores e
