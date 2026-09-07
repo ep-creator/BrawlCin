@@ -15,6 +15,7 @@ import pygame
 from .. import recursos
 from ..config import gameplay as regras
 from ..config import tela as config_tela
+from ..entrada import Comando, TECLADO_P1, TECLADO_P2
 from ..mundo.item import Item
 from ..mundo.jogador import Jogador1, Jogador2
 from ..mundo.mapa import Mapa
@@ -37,6 +38,11 @@ class CenaPartida(Cena):
         self.mapa = Mapa()
         self.jogador1 = Jogador1(*regras.SPAWN_JOGADOR_1, personagem=PERSONAGENS[chave_p1])
         self.jogador2 = Jogador2(*regras.SPAWN_JOGADOR_2, personagem=PERSONAGENS[chave_p2])
+
+        # Os controles são da cena, não do jogador: o jogador só recebe
+        # Comando e nem sabe que existe teclado.
+        self.controles = {1: TECLADO_P1, 2: TECLADO_P2}
+        self._disparos_pendentes: set[int] = set()
 
         self.balas: list[Projetil] = []
         self.itens: list[Item] = []
@@ -100,10 +106,12 @@ class CenaPartida(Cena):
         if evento.type != pygame.KEYDOWN:
             return None
 
-        if evento.key == self.jogador1.controles["atirar"]:
-            self._tentar_atirar(self.jogador1, self.jogador2, COR_BALA_P1)
-        if evento.key == self.jogador2.controles["atirar"]:
-            self._tentar_atirar(self.jogador2, self.jogador1, COR_BALA_P2)
+        # O tiro é por toque, não por tecla segurada: por isso ele nasce de um
+        # KEYDOWN e fica pendente até o frame ser processado, em vez de sair de
+        # pygame.key.get_pressed(), que dispararia em rajada.
+        for jogador in (self.jogador1, self.jogador2):
+            if evento.key == self.controles[jogador.numero].atirar:
+                self._disparos_pendentes.add(jogador.numero)
 
         return None
 
@@ -213,6 +221,7 @@ class CenaPartida(Cena):
         self.balas.clear()
         self._espalhar_itens()
         self.inicio_recarga = {1: 0, 2: 0}
+        self._disparos_pendentes.clear()
 
     # --------------------------------------------------------------- simulação
 
@@ -223,8 +232,14 @@ class CenaPartida(Cena):
 
         self._recarregar()
 
-        self.jogador1.mover(self.mapa)
-        self.jogador2.mover(self.mapa)
+        comandos = self._ler_comandos()
+        self.jogador1.mover(comandos[1], self.mapa)
+        self.jogador2.mover(comandos[2], self.mapa)
+
+        if comandos[1].atirar:
+            self._tentar_atirar(self.jogador1, self.jogador2, COR_BALA_P1)
+        if comandos[2].atirar:
+            self._tentar_atirar(self.jogador2, self.jogador1, COR_BALA_P2)
 
         self._coletar_itens()
         self._mover_balas()
@@ -234,6 +249,18 @@ class CenaPartida(Cena):
             transicao, self._transicao_pendente = self._transicao_pendente, None
             return transicao
         return None
+
+    def _ler_comandos(self) -> dict[int, Comando]:
+        """Um comando por jogador para este frame. Consome os disparos pendentes."""
+        teclas = pygame.key.get_pressed()
+        comandos = {
+            jogador.numero: self.controles[jogador.numero].ler(
+                teclas, atirar=jogador.numero in self._disparos_pendentes
+            )
+            for jogador in (self.jogador1, self.jogador2)
+        }
+        self._disparos_pendentes.clear()
+        return comandos
 
     def _recarregar(self) -> None:
         agora = pygame.time.get_ticks()

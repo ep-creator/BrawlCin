@@ -36,7 +36,6 @@
 
 ## Pendências
 
-- [ ] Velocidade da diagonal está ~41% maior que a dos eixos
 - [ ] Mapa (791x500) é desenhado sem escala numa janela de 1920x1080
 - [ ] Melhorar o placar
 - [ ] HUD: melhorar a vida; trocar o texto dos bônus de velocidade e dano por ícone com contagem
@@ -44,5 +43,6 @@
 - [ ] Avaliar mais vida para alongar a batalha
 - [ ] Redesenhar a tela de seleção
 
-O plano de refactor que endereça as duas primeiras está em `design-alvo.md`
-(no projeto do Claude), passos 3 e 4.
+A velocidade da diagonal foi corrigida: a direção agora é normalizada em
+`brawl/entrada.py`. O plano que endereça o item do mapa está em `design-alvo.md`
+(no projeto do Claude), passo 4.
