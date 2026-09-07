@@ -119,9 +119,9 @@ class CenaAbertura(Cena):
         elif self.etapa is _Etapa.CONFIRMANDO:
             self.frames_confirmando -= 1
             if self.frames_confirmando <= 0:
-                from .selecao import CenaSelecao  # importado aqui para evitar ciclo
+                from .menu import CenaMenu  # importado aqui para evitar ciclo
 
-                return Trocar(CenaSelecao())
+                return Trocar(CenaMenu())
 
         return None
 

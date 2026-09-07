@@ -47,6 +47,9 @@ pesada. Vale rodá-la sempre que a hitbox dos pés, o mapa ou os spawns mudarem:
 
 `ESC` sai. No fim do campeonato, `R` reinicia e `T` volta para a seleção.
 
+A tela de **Controles**, no menu, mostra estas mesmas teclas lendo os controles
+de verdade — se um dia forem remapeados, ela acompanha.
+
 `F1` alterna o **modo de teste**: os personagens viram os retângulos das duas
 hitboxes (corpo cheio na cor do jogador, pés em contorno branco) e a ocultação
 pela vegetação vira opacidade em vez de sumiço — com a grama ao redor clareando
@@ -94,8 +97,8 @@ estado inicial e os ajustes ficam em `brawl/config/depuracao.py`.
 
 ### Telas e animação
 
-- [ ] **Ajustar e criar menu** — hoje a abertura vai direto para a seleção. Não
-      há menu de verdade: nem opções, nem sair, nem créditos.
+- [x] ~~**Menu**~~ — feito. Abertura leva ao menu (Jogar / Controles / Sair),
+      navegável pelos dois teclados. Falta avaliar se vale uma tela de créditos.
 - [ ] **Animação de seleção** + redesenhar a tela de seleção.
 - [ ] **Animação de vitória / fim de round** + redesenhar as duas telas. Já são
       cenas separadas (`cenas/sobreposicao.py`), dá para animá-las sem tocar na

@@ -7,6 +7,8 @@ import pytest
 
 from brawl.cenas.abertura import CenaAbertura, _Etapa
 from brawl.cenas.base import Cena, Desempilhar, Empilhar, Sair, Trocar
+from brawl.cenas.controles import CenaControles, nome_da_tecla
+from brawl.cenas.menu import CenaMenu
 from brawl.cenas.partida import CenaPartida
 from brawl.cenas.selecao import CenaSelecao
 from brawl.cenas.sobreposicao import CenaSobreposicao
@@ -99,7 +101,7 @@ class TestAbertura:
         avancar_frame(app)
         assert abertura.etapa is _Etapa.ESPERA
 
-    def test_enter_leva_para_a_selecao(self, app):
+    def test_enter_leva_para_o_menu(self, app):
         abertura = CenaAbertura()
         app.pilha = [abertura]
         avancar_frame(app)
@@ -108,7 +110,7 @@ class TestAbertura:
         teclar(pygame.K_RETURN)
         for _ in range(50):
             avancar_frame(app)
-        assert isinstance(app.topo, CenaSelecao)
+        assert isinstance(app.topo, CenaMenu)
 
 
 class TestSelecao:
@@ -193,3 +195,126 @@ def test_esc_encerra_de_qualquer_cena(app, construtor):
     app.pilha = [construtor()]
     teclar(pygame.K_ESCAPE)
     assert avancar_frame(app) is False
+
+
+class TestMenu:
+    """O menu principal, entre a abertura e a seleção."""
+
+    def test_comeca_no_primeiro_item(self):
+        assert CenaMenu().indice == 0
+
+    @pytest.mark.parametrize("tecla_baixo", [pygame.K_s, pygame.K_DOWN])
+    def test_desce_com_qualquer_dos_dois_teclados(self, tecla_baixo):
+        """Quem está no teclado da direita também precisa conseguir navegar."""
+        menu = CenaMenu()
+        menu.processar_evento(pygame.event.Event(pygame.KEYDOWN, key=tecla_baixo))
+        assert menu.indice == 1
+
+    @pytest.mark.parametrize("tecla_cima", [pygame.K_w, pygame.K_UP])
+    def test_sobe_com_qualquer_dos_dois_teclados(self, tecla_cima):
+        menu = CenaMenu()
+        menu.indice = 1
+        menu.processar_evento(pygame.event.Event(pygame.KEYDOWN, key=tecla_cima))
+        assert menu.indice == 0
+
+    def test_a_selecao_da_a_volta(self):
+        menu = CenaMenu()
+        menu.processar_evento(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_UP))
+        assert menu.indice == len(menu.opcoes) - 1
+        menu.processar_evento(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_DOWN))
+        assert menu.indice == 0
+
+    @pytest.mark.parametrize("confirma", [pygame.K_SPACE, pygame.K_RETURN])
+    def test_jogar_vai_para_a_selecao(self, app, confirma):
+        menu = CenaMenu()
+        menu.indice = 0
+        transicao = menu.processar_evento(
+            pygame.event.Event(pygame.KEYDOWN, key=confirma)
+        )
+        assert isinstance(transicao, Trocar)
+        assert isinstance(transicao.cena, CenaSelecao)
+
+    def test_controles_empilha_sem_perder_o_menu(self, app):
+        menu = CenaMenu()
+        menu.indice = 1
+        transicao = menu.processar_evento(
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
+        )
+        assert isinstance(transicao, Empilhar)
+        assert isinstance(transicao.cena, CenaControles)
+
+    def test_sair_encerra(self):
+        menu = CenaMenu()
+        menu.indice = 2
+        transicao = menu.processar_evento(
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
+        )
+        assert isinstance(transicao, Sair)
+
+    def test_esc_encerra(self):
+        transicao = CenaMenu().processar_evento(
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        )
+        assert isinstance(transicao, Sair)
+
+    def test_o_fluxo_inteiro_do_menu_ate_a_partida(self, app):
+        """Menu -> seleção -> partida, sem acumular cena na pilha."""
+        app.pilha = [CenaMenu()]
+        teclar(pygame.K_RETURN)          # JOGAR
+        avancar_frame(app)
+        assert isinstance(app.topo, CenaSelecao)
+
+        teclar(pygame.K_SPACE)
+        teclar(pygame.K_RETURN)
+        for _ in range(45):
+            avancar_frame(app)
+        assert isinstance(app.topo, CenaPartida)
+        assert len(app.pilha) == 1
+
+
+class TestControles:
+    """A tela de ajuda lê as teclas dos controles de verdade."""
+
+    def test_e_transparente_e_o_menu_fica_atras(self, app):
+        menu = CenaMenu()
+        app.pilha = [menu, CenaControles()]
+        app._desenhar()
+        assert app.topo.transparente is True
+
+    def test_qualquer_tecla_volta(self):
+        transicao = CenaControles().processar_evento(
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_j)
+        )
+        assert isinstance(transicao, Desempilhar)
+
+    def test_esc_volta_em_vez_de_sair(self):
+        """Aqui ESC não pode encerrar o jogo: ele é o botão de voltar."""
+        transicao = CenaControles().processar_evento(
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        )
+        assert isinstance(transicao, Desempilhar)
+
+    def test_volta_para_o_menu_pela_pilha(self, app):
+        app.pilha = [CenaMenu(), CenaControles()]
+        teclar(pygame.K_ESCAPE)
+        avancar_frame(app)
+        assert isinstance(app.topo, CenaMenu)
+        assert len(app.pilha) == 1
+
+    @pytest.mark.parametrize("codigo,esperado", [
+        (pygame.K_w, "W"),
+        (pygame.K_SPACE, "ESPAÇO"),
+        (pygame.K_RETURN, "ENTER"),
+        (pygame.K_UP, "CIMA"),
+    ])
+    def test_nomes_de_tecla_legiveis(self, codigo, esperado):
+        assert nome_da_tecla(codigo) == esperado
+
+    def test_as_teclas_exibidas_vem_do_controle(self):
+        """Se a tela repetisse as teclas à mão, ela mentiria ao remapear."""
+        from brawl.cenas.controles import LINHAS_DOS_JOGADORES
+        from brawl.entrada import TECLADO_P1, TECLADO_P2
+
+        pares = {(p1, p2) for _, p1, p2 in LINHAS_DOS_JOGADORES}
+        assert (TECLADO_P1.atirar, TECLADO_P2.atirar) in pares
+        assert (TECLADO_P1.cima, TECLADO_P2.cima) in pares
