@@ -147,17 +147,28 @@ class TestVegetacaoEmFaixas:
             assert faixa.profundidade % altura == 0
 
     def test_a_vegetacao_nao_esta_no_fundo(self, mapa):
-        """Se estivesse, nada poderia passar na frente dela."""
-        fundo = pygame.Surface(mapa.tamanho)
-        mapa.desenhar(fundo)
-        verde_da_grama = (181, 230, 29)
-        contagem = sum(
+        """Se estivesse, nada poderia passar na frente dela.
+
+        Comparar contra uma cor fixa não serviria: bastaria trocar a arte para o
+        teste passar sem testar nada. Aqui o fundo é comparado consigo mesmo
+        acrescido das faixas — se a vegetação já estivesse achatada no fundo, as
+        duas imagens seriam iguais.
+        """
+        so_fundo = pygame.Surface(mapa.tamanho)
+        mapa.desenhar(so_fundo)
+
+        com_vegetacao = so_fundo.copy()
+        for faixa in mapa.faixas_de_vegetacao:
+            faixa.desenhar(com_vegetacao)
+
+        diferentes = sum(
             1
-            for x in range(0, mapa.rect.width, 20)
-            for y in range(0, mapa.rect.height, 20)
-            if fundo.get_at((x, y))[:3] == verde_da_grama
+            for area in mapa.arbustos
+            for x in range(area.left, area.right, 4)
+            for y in range(area.top, area.bottom, 4)
+            if so_fundo.get_at((x, y)) != com_vegetacao.get_at((x, y))
         )
-        assert contagem == 0
+        assert diferentes > 0
 
     def test_arte_mais_alta_que_o_tile_e_ancorada_na_base(self, mapa):
         """Uma moita de 60 px numa grade de 20 px cresce para cima.
