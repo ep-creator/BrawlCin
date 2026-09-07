@@ -73,8 +73,24 @@ estado inicial e os ajustes ficam em `brawl/config/depuracao.py`.
         área toda de grama e deixe a arte um pouco mais baixa.
 - [ ] **Camada `parede`** — o mapa ainda não tem nada sólido além da água. Basta
       criar uma camada de tiles com esse nome no Tiled; o código já a lê.
-- [ ] **Novos sprites** — os atuais são PNGs de 376x664 reduzidos para 40x60. Ao
-      trocar, conferir `TAMANHO_FRAME_JOGADOR` e as duas hitboxes junto.
+- [ ] **Novos sprites, desenhados em cima das hitboxes** — decidido: a arte
+      passa a se adequar aos retângulos, e não o contrário.
+
+      Hoje há um descompasso que o modo de teste (F1) deixa ver: o sprite é
+      desenhado com 40x60, mas o corpo que as balas acertam tem só 24x40. Quase
+      metade da largura visível do personagem não é acertável, e os pés que
+      colidem com parede e água são ainda mais estreitos (16x12). Isso é o tipo
+      de coisa que faz o jogo parecer injusto sem ninguém saber explicar por quê.
+
+      Ao redesenhar, use o retângulo como gabarito: o corpo do personagem deve
+      preencher os 24x40 do `TAMANHO_HITBOX_ENTIDADE`, e a base dele coincidir
+      com os pés. Sobra pode existir (cabelo, arma, capa), desde que seja
+      claramente periférica — o que o jogador lê como "o personagem" precisa ser
+      o que o jogo trata como o personagem.
+
+      Se preferir o caminho inverso em algum caso, é só ajustar
+      `TAMANHO_HITBOX_ENTIDADE`; os testes conferem que o corpo não fica
+      absurdamente estreito para o sprite, mas não impõem um valor.
 
 ### Telas e animação
 
