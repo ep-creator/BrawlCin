@@ -1,0 +1,195 @@
+"""Cenas: a pilha, as transições e o fluxo entre telas."""
+
+from __future__ import annotations
+
+import pygame
+import pytest
+
+from brawl.cenas.abertura import CenaAbertura, _Etapa
+from brawl.cenas.base import Cena, Desempilhar, Empilhar, Sair, Trocar
+from brawl.cenas.partida import CenaPartida
+from brawl.cenas.selecao import CenaSelecao
+from brawl.cenas.sobreposicao import CenaSobreposicao
+from brawl.config import gameplay as regras
+
+from .apoio import CenaBoba, avancar_frame, teclar
+
+
+class TestPilha:
+    """Pilha, e não só 'próxima cena', porque o fim de rodada precisa desenhar
+    a partida congelada atrás do véu."""
+
+    def test_empilhar_preserva_a_de_baixo(self, app):
+        base, veu = CenaBoba("base"), CenaBoba("veu", transparente=True)
+        app.pilha = [base]
+        app._aplicar(Empilhar(veu))
+        assert app.pilha == [base, veu]
+
+    def test_cena_transparente_deixa_a_de_baixo_aparecer(self, app):
+        base, veu = CenaBoba("base"), CenaBoba("veu", transparente=True)
+        app.pilha = [base, veu]
+        app._desenhar()
+        assert (base.desenhos, veu.desenhos) == (1, 1)
+
+    def test_cena_opaca_corta_o_desenho_de_baixo(self, app):
+        base, topo = CenaBoba("base"), CenaBoba("topo")
+        app.pilha = [base, topo]
+        app._desenhar()
+        assert (base.desenhos, topo.desenhos) == (0, 1)
+
+    def test_trocar_substitui_so_o_topo(self, app):
+        base, antiga, nova = CenaBoba("base"), CenaBoba("antiga"), CenaBoba("nova")
+        app.pilha = [base, antiga]
+        app._aplicar(Trocar(nova))
+        assert app.pilha == [base, nova]
+
+    def test_desempilhar_devolve_o_controle(self, app):
+        base, veu = CenaBoba("base"), CenaBoba("veu")
+        app.pilha = [base, veu]
+        app._aplicar(Desempilhar())
+        assert app.pilha == [base]
+
+    def test_sair_esvazia_e_encerra(self, app):
+        app.pilha = [CenaBoba()]
+        assert app._aplicar(Sair()) is False
+        assert app.pilha == []
+
+    def test_so_o_topo_e_atualizado(self, app):
+        """É o que congela a partida sob o véu, sem nenhuma flag na partida."""
+        partida = CenaPartida("shelly", "colt")
+        app.pilha = [partida, CenaBoba("veu", transparente=True)]
+        posicao = partida.jogador1.hitbox_entidade.midbottom
+        for _ in range(10):
+            avancar_frame(app)
+        assert partida.jogador1.hitbox_entidade.midbottom == posicao
+
+
+class TestCenaBase:
+    def test_esc_encerra_por_padrao(self):
+        evento = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        assert isinstance(Cena().processar_evento(evento), Sair)
+
+    def test_outros_eventos_nao_transicionam(self):
+        evento = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_a)
+        assert Cena().processar_evento(evento) is None
+
+    def test_fechar_a_janela_e_tratado_pelo_app(self, app):
+        """Nenhuma cena precisa lembrar de tratar QUIT."""
+        app.pilha = [CenaBoba()]
+        pygame.event.post(pygame.event.Event(pygame.QUIT))
+        assert app._processar_eventos() is False
+
+
+class TestAbertura:
+    def test_comeca_no_fade(self, app):
+        assert CenaAbertura().etapa is _Etapa.FADE
+
+    def test_chega_sozinha_a_espera(self, app):
+        abertura = CenaAbertura()
+        app.pilha = [abertura]
+        for _ in range(150):
+            avancar_frame(app)
+        assert abertura.etapa is _Etapa.ESPERA
+
+    def test_espaco_pula_a_animacao(self, app):
+        abertura = CenaAbertura()
+        app.pilha = [abertura]
+        avancar_frame(app)
+        teclar(pygame.K_SPACE)
+        avancar_frame(app)
+        assert abertura.etapa is _Etapa.ESPERA
+
+    def test_enter_leva_para_a_selecao(self, app):
+        abertura = CenaAbertura()
+        app.pilha = [abertura]
+        avancar_frame(app)
+        teclar(pygame.K_SPACE)
+        avancar_frame(app)
+        teclar(pygame.K_RETURN)
+        for _ in range(50):
+            avancar_frame(app)
+        assert isinstance(app.topo, CenaSelecao)
+
+
+class TestSelecao:
+    def test_confirmar_os_dois_comeca_a_partida(self, app):
+        app.pilha = [CenaSelecao()]
+        teclar(pygame.K_SPACE)
+        teclar(pygame.K_RETURN)
+        for _ in range(45):
+            avancar_frame(app)
+        assert isinstance(app.topo, CenaPartida)
+
+    def test_confirmar_so_um_nao_comeca(self, app):
+        app.pilha = [CenaSelecao()]
+        teclar(pygame.K_SPACE)
+        for _ in range(45):
+            avancar_frame(app)
+        assert isinstance(app.topo, CenaSelecao)
+
+    def test_as_setas_trocam_de_personagem(self, app):
+        selecao = CenaSelecao()
+        app.pilha = [selecao]
+        indice = selecao.escolhas["P1"].indice
+        teclar(pygame.K_d)
+        avancar_frame(app)
+        assert selecao.escolhas["P1"].indice != indice
+
+
+class TestFimDeRodadaEDeJogo:
+    def test_o_veu_de_rodada_devolve_para_a_partida(self, app):
+        partida = CenaPartida("shelly", "colt")
+        app.pilha = [partida]
+        partida._pontuar(vencedor=1)
+        avancar_frame(app)
+        assert isinstance(app.topo, CenaSobreposicao)
+
+        partida.jogador1.vida = 1
+        teclar(pygame.K_SPACE)
+        avancar_frame(app)
+        assert app.topo is partida
+        assert partida.jogador1.vida == partida.jogador1.personagem.vida_maxima
+
+    def test_r_reinicia_o_campeonato(self, app):
+        partida = CenaPartida("shelly", "colt")
+        app.pilha = [partida]
+        for _ in range(regras.PONTOS_PARA_VENCER_CAMPEONATO):
+            partida._pontuar(vencedor=2)
+        avancar_frame(app)
+        teclar(pygame.K_r)
+        avancar_frame(app)
+        assert app.topo is partida
+        assert partida.pontos == {1: 0, 2: 0}
+
+    def test_t_volta_para_a_selecao_sem_empilhar_partida(self, app):
+        """A tecla T instanciava um Game dentro do laço de eventos do anterior."""
+        partida = CenaPartida("shelly", "colt")
+        app.pilha = [partida]
+        for _ in range(regras.PONTOS_PARA_VENCER_CAMPEONATO):
+            partida._pontuar(vencedor=1)
+        avancar_frame(app)
+        teclar(pygame.K_t)
+        avancar_frame(app)
+        avancar_frame(app)
+        assert isinstance(app.topo, CenaSelecao)
+        assert len(app.pilha) == 1
+
+    def test_o_veu_cobre_a_tela_inteira(self, app):
+        partida = CenaPartida("shelly", "colt")
+        app.pilha = [partida]
+        partida._pontuar(vencedor=1)
+        avancar_frame(app)
+        avancar_frame(app)
+        canto = app.superficie.get_at((5, app.superficie.get_height() // 2))[:3]
+        assert canto != partida.camera.cor_das_barras
+
+
+@pytest.mark.parametrize("construtor", [
+    CenaAbertura,
+    CenaSelecao,
+    lambda: CenaPartida("shelly", "colt"),
+])
+def test_esc_encerra_de_qualquer_cena(app, construtor):
+    app.pilha = [construtor()]
+    teclar(pygame.K_ESCAPE)
+    assert avancar_frame(app) is False

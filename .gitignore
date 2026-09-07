@@ -9,3 +9,6 @@ __pycache__/
 
 # Pasta onde o app do Claude deposita arquivos entregues no chat
 Claude outputs/
+
+# pytest
+.pytest_cache/

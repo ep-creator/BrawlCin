@@ -1,0 +1,8 @@
+[tool.pytest.ini_options]
+testpaths = ["testes"]
+# -m "not lento" deixa de fora a varredura pixel a pixel do mapa, que leva
+# alguns segundos. Para rodá-la:  python -m pytest -m lento
+addopts = "-q --strict-markers -m 'not lento'"
+markers = [
+    "lento: varre o mapa inteiro com busca em largura; fora da rodada padrão",
+]
