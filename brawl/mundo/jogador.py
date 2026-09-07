@@ -24,6 +24,7 @@ class Jogador:
     numero: int = 0
 
     def __init__(self, x: int, y: int, personagem: Personagem):
+        """(x, y) é a posição dos PÉS do personagem, em coordenadas de mundo."""
         self.personagem = personagem
 
         pasta = personagem.pasta_assets
@@ -39,27 +40,26 @@ class Jogador:
         self.sprite_parado = frame(personagem.sprite_parado)
 
         # self.rect é só para desenho — desenhar() posiciona o sprite por ele.
-        self.rect = self.sprite_parado.get_rect(topleft=(x, y))
+        self.rect = self.sprite_parado.get_rect()
 
-        # hitbox_entidade: colisão "real" (balas, itens).
-        self.hitbox_entidade = self.rect.inflate(*regras.HITBOX_ENTIDADE_AJUSTE)
+        # hitbox_entidade: o corpo. É o que balas e itens acertam.
+        self.hitbox_entidade = pygame.Rect((0, 0), regras.TAMANHO_HITBOX_ENTIDADE)
 
-        # hitbox_mapa: faixa fina colada na base da hitbox_entidade, só para
-        # colisão com paredes e água. Recalculada a cada movimento.
-        self.hitbox_mapa = pygame.Rect(
-            0, 0, self.hitbox_entidade.width, regras.HITBOX_MAPA_ALTURA
-        )
+        # hitbox_mapa: a faixa dos pés, só para colisão com parede e água.
+        # Tem largura própria, e não a do corpo: pés estreitos deixam a
+        # navegação tolerante sem deixar o jogador difícil de acertar.
+        self.hitbox_mapa = pygame.Rect((0, 0), regras.TAMANHO_HITBOX_MAPA)
 
-        # Posição real, em ponto flutuante. pygame.Rect só guarda inteiro, e
-        # truncar a cada frame quebraria o movimento diagonal: com a direção
-        # normalizada, cada eixo anda 0,707 da velocidade, e 1,41 px por frame
-        # viraria 1 px. Os Rect são a projeção inteira desta posição.
-        self._x = float(self.hitbox_entidade.x)
-        self._y = float(self.hitbox_entidade.y)
-        self._sincronizar_hitboxes()
+        # Posição real, em ponto flutuante, do canto da hitbox do corpo.
+        # pygame.Rect só guarda inteiro, e truncar a cada frame quebraria o
+        # movimento diagonal: com a direção normalizada, cada eixo anda 0,707 da
+        # velocidade, e 1,41 px por frame viraria 1 px.
+        self._x = 0.0
+        self._y = 0.0
 
         self.spawn_x = x
         self.spawn_y = y
+        self.teleportar_para(x, y)
 
         self.vida = personagem.vida_maxima
         self.balas = regras.BALAS_MAXIMAS
@@ -76,12 +76,28 @@ class Jogador:
     # ------------------------------------------------------------------ mapa
 
     def _sincronizar_hitboxes(self) -> None:
-        """Projeta a posição em float nos Rect inteiros."""
+        """Projeta a posição em float nos Rect inteiros.
+
+        As três caixas são ancoradas nos pés: a base da hitbox do corpo, a base
+        da faixa de mapa e a base do sprite coincidem.
+        """
         self.hitbox_entidade.topleft = (round(self._x), round(self._y))
         self.hitbox_mapa.midbottom = self.hitbox_entidade.midbottom
+        self.rect.midbottom = self.hitbox_entidade.midbottom
 
     def _colide_com_mapa(self, mapa) -> bool:
-        """Paredes e água bloqueiam. Arbustos não — eles só escondem."""
+        """Paredes e água bloqueiam. Arbustos não — eles só escondem.
+
+        A borda do mapa conta como parede. O mapa antigo tinha um cinturão de
+        nove paredes desenhadas à mão para isso, todas extrapolando o próprio
+        mapa; sendo regra do código, mapa nenhum precisa desenhar a moldura.
+
+        É uma checagem de contenção e não um clamp de posição: assim a borda
+        passa pelo mesmo mecanismo de reverter das paredes, e o jogador desliza
+        rente a ela em vez de grudar.
+        """
+        if not mapa.rect.contains(self.hitbox_mapa):
+            return True
         return (
             self.hitbox_mapa.collidelist(mapa.paredes) != -1
             or self.hitbox_mapa.collidelist(mapa.aguas) != -1
@@ -96,7 +112,7 @@ class Jogador:
             if not self.hitbox_entidade.colliderect(arbusto):
                 continue
             intersecao = self.hitbox_entidade.clip(arbusto)
-            if intersecao.width * intersecao.height >= area_jogador / 2:
+            if intersecao.width * intersecao.height >= area_jogador * regras.FRACAO_PARA_ESCONDER:
                 self.escondido = True
                 return
 
@@ -135,14 +151,12 @@ class Jogador:
 
         self._atualizar_ocultacao(mapa)
 
-        # A posição visual só é atualizada depois que a colisão foi resolvida.
-        self.rect.center = self.hitbox_entidade.center
-
-    def teleportar_para(self, x: float, y: float) -> None:
-        """Reposiciona a hitbox de entidade, mantendo float e Rect coerentes."""
-        self._x, self._y = float(x), float(y)
+    def teleportar_para(self, pes_x: float, pes_y: float) -> None:
+        """Reposiciona o jogador pelos pés, mantendo float e Rect coerentes."""
+        largura, altura = self.hitbox_entidade.size
+        self._x = float(pes_x) - largura / 2
+        self._y = float(pes_y) - altura
         self._sincronizar_hitboxes()
-        self.rect.center = self.hitbox_entidade.center
 
     def receber_dano(self, quantidade: int = 1) -> bool:
         """Aplica dano. Devolve True se o jogador morreu."""
@@ -155,9 +169,7 @@ class Jogador:
         self.bonus_velocidade = 0
         self.bonus_dano = 0
 
-        self.rect.topleft = (self.spawn_x, self.spawn_y)
-        hitbox_no_spawn = self.rect.inflate(*regras.HITBOX_ENTIDADE_AJUSTE)
-        self.teleportar_para(*hitbox_no_spawn.topleft)
+        self.teleportar_para(self.spawn_x, self.spawn_y)
 
     # ---------------------------------------------------------------- desenho
 
