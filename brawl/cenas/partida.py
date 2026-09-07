@@ -54,10 +54,15 @@ class CenaPartida(Cena):
 
         self.pontos = {1: 0, 2: 0}
 
-        # Instante em que a recarga de cada jogador começou, por número.
-        # Um dicionário em vez de inicio_recarga_p1/p2 — o par gêmeo é
-        # justamente o que impede o jogo de ter um terceiro jogador.
-        self.inicio_recarga = {1: 0, 2: 0}
+        # Segundos de recarga que faltam para cada jogador, por número.
+        # Um dicionário em vez de um par gêmeo p1/p2 — o par é justamente o que
+        # impede o jogo de ter um terceiro jogador.
+        #
+        # Conta tempo de jogo, e não relógio de parede: só desce quando a
+        # partida é atualizada. Com o relógio de parede, qualquer pausa maior
+        # que TEMPO_RECARGA devolvia munição cheia — inclusive pausar de
+        # propósito para recarregar na hora.
+        self.recarga_restante = {1: 0.0, 2: 0.0}
 
         self._transicao_pendente: Transicao | None = None
 
@@ -149,7 +154,7 @@ class CenaPartida(Cena):
         )
         atirador.balas -= 1
         if atirador.balas == 0:
-            self.inicio_recarga[atirador.numero] = pygame.time.get_ticks()
+            self.recarga_restante[atirador.numero] = regras.TEMPO_RECARGA
 
     # ----------------------------------------------------------------- regras
 
@@ -234,7 +239,7 @@ class CenaPartida(Cena):
         self.jogador2.renascer()
         self.balas.clear()
         self._espalhar_itens()
-        self.inicio_recarga = {1: 0, 2: 0}
+        self.recarga_restante = {1: 0.0, 2: 0.0}
         self._disparos_pendentes.clear()
 
     # --------------------------------------------------------------- simulação
@@ -244,7 +249,7 @@ class CenaPartida(Cena):
             transicao, self._transicao_pendente = self._transicao_pendente, None
             return transicao
 
-        self._recarregar()
+        self._recarregar(dt)
 
         comandos = self._ler_comandos()
         self.jogador1.mover(comandos[1], self.mapa)
@@ -276,13 +281,15 @@ class CenaPartida(Cena):
         self._disparos_pendentes.clear()
         return comandos
 
-    def _recarregar(self) -> None:
-        agora = pygame.time.get_ticks()
-        for jogador in (self.jogador1, self.jogador2):
-            inicio = self.inicio_recarga[jogador.numero]
-            if jogador.balas == 0 and agora - inicio >= regras.TEMPO_RECARGA_MS:
+    def _recarregar(self, dt: float) -> None:
+        for jogador in self._jogadores():
+            if jogador.balas > 0:
+                continue
+            restante = self.recarga_restante[jogador.numero] - dt
+            if restante <= 0:
                 jogador.balas = regras.BALAS_MAXIMAS
-                self.inicio_recarga[jogador.numero] = 0
+                restante = 0.0
+            self.recarga_restante[jogador.numero] = restante
 
     def _coletar_itens(self) -> None:
         for item in list(self.itens):

@@ -57,7 +57,10 @@ FRACAO_PARA_ESCONDER = 0.5
 
 # --- MUNIÇÃO ---
 BALAS_MAXIMAS = 4
-TEMPO_RECARGA_MS = 3000
+
+# Em SEGUNDOS de tempo de jogo, e não de relógio de parede. A recarga só avança
+# enquanto a partida é atualizada, então pausar não devolve munição de graça.
+TEMPO_RECARGA = 3.0
 
 # --- PROJÉTIL ---
 PROJETIL_RAIO = 6

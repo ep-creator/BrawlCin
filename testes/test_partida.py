@@ -91,30 +91,54 @@ class TestDisparo:
         partida._tentar_atirar(partida.jogador1, partida.jogador2, COR_BALA_P1)
         assert partida.balas == []
 
-    def test_zerar_a_municao_inicia_a_recarga(self, partida):
+    @staticmethod
+    def _esvaziar(partida):
         for _ in range(regras.BALAS_MAXIMAS):
             partida._tentar_atirar(partida.jogador1, partida.jogador2, COR_BALA_P1)
+
+    def test_zerar_a_municao_inicia_a_recarga(self, partida):
+        self._esvaziar(partida)
         assert partida.jogador1.balas == 0
-        assert partida.inicio_recarga[1] > 0
+        assert partida.recarga_restante[1] == regras.TEMPO_RECARGA
 
     def test_recarrega_depois_do_tempo(self, partida):
-        for _ in range(regras.BALAS_MAXIMAS):
-            partida._tentar_atirar(partida.jogador1, partida.jogador2, COR_BALA_P1)
-        instante = partida.inicio_recarga[1]
-        with mock.patch("pygame.time.get_ticks",
-                        lambda: instante + regras.TEMPO_RECARGA_MS + 1):
-            partida._recarregar()
+        self._esvaziar(partida)
+        partida._recarregar(regras.TEMPO_RECARGA + 0.01)
         assert partida.jogador1.balas == regras.BALAS_MAXIMAS
-        assert partida.inicio_recarga[1] == 0
+        assert partida.recarga_restante[1] == 0
 
     def test_nao_recarrega_antes_da_hora(self, partida):
-        for _ in range(regras.BALAS_MAXIMAS):
-            partida._tentar_atirar(partida.jogador1, partida.jogador2, COR_BALA_P1)
-        instante = partida.inicio_recarga[1]
-        with mock.patch("pygame.time.get_ticks",
-                        lambda: instante + regras.TEMPO_RECARGA_MS - 1):
-            partida._recarregar()
+        self._esvaziar(partida)
+        partida._recarregar(regras.TEMPO_RECARGA - 0.01)
         assert partida.jogador1.balas == 0
+
+    def test_a_recarga_acumula_entre_frames(self, partida):
+        self._esvaziar(partida)
+        for _ in range(29):
+            partida._recarregar(0.1)
+        assert partida.jogador1.balas == 0
+        partida._recarregar(0.1)
+        assert partida.jogador1.balas == regras.BALAS_MAXIMAS
+
+    def test_pausar_nao_devolve_municao(self, partida):
+        """O bug que a pausa criaria se a recarga usasse relógio de parede.
+
+        Uma pausa de meia hora não pode valer recarga: enquanto a partida não é
+        atualizada, nenhum dt chega, e a munição fica onde estava. Aqui o
+        relógio de parede é adiantado meia hora para provar que ele não é lido.
+        """
+        self._esvaziar(partida)
+        with mock.patch("pygame.time.get_ticks", lambda: 30 * 60 * 1000):
+            partida._recarregar(0.0)
+        assert partida.jogador1.balas == 0
+        assert partida.recarga_restante[1] == regras.TEMPO_RECARGA
+
+    def test_recarrega_so_quem_esta_sem_municao(self, partida):
+        self._esvaziar(partida)
+        partida.jogador2.balas = 2
+        partida._recarregar(regras.TEMPO_RECARGA + 0.01)
+        assert partida.jogador1.balas == regras.BALAS_MAXIMAS
+        assert partida.jogador2.balas == 2
 
     def test_a_bala_acerta_e_causa_dano(self, partida):
         # Sem itens no chão: um orbe de vida sob o alvo curaria o dano da bala
