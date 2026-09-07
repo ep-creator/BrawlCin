@@ -131,3 +131,41 @@ class TestFusaoDeTiles:
                     cobertas.add((coluna, linha))
 
         assert cobertas == celulas
+
+
+class TestVegetacaoEmFaixas:
+    """A vegetação sai do fundo achatado para poder ser desenhada por profundidade."""
+
+    def test_ha_uma_faixa_por_linha_com_vegetacao(self, mapa):
+        camada = next(c for c in mapa.tmx.layers if c.name == CAMADA_VEGETACAO)
+        linhas = {linha for _, linha, _ in camada.tiles()}
+        assert len(mapa.faixas_de_vegetacao) == len(linhas)
+
+    def test_a_profundidade_e_a_base_da_celula(self, mapa):
+        altura = mapa.tmx.tileheight
+        for faixa in mapa.faixas_de_vegetacao:
+            assert faixa.profundidade % altura == 0
+
+    def test_a_vegetacao_nao_esta_no_fundo(self, mapa):
+        """Se estivesse, nada poderia passar na frente dela."""
+        fundo = pygame.Surface(mapa.tamanho)
+        mapa.desenhar(fundo)
+        verde_da_grama = (181, 230, 29)
+        contagem = sum(
+            1
+            for x in range(0, mapa.rect.width, 20)
+            for y in range(0, mapa.rect.height, 20)
+            if fundo.get_at((x, y))[:3] == verde_da_grama
+        )
+        assert contagem == 0
+
+    def test_arte_mais_alta_que_o_tile_e_ancorada_na_base(self, mapa):
+        """Uma moita de 60 px numa grade de 20 px cresce para cima.
+
+        É o que permite trocar a arte por vegetação alta sem mexer no código.
+        """
+        altura = mapa.tmx.tileheight
+        for faixa in mapa.faixas_de_vegetacao:
+            topo = faixa.posicao[1]
+            assert topo + faixa.imagem.get_height() == faixa.profundidade
+            assert faixa.imagem.get_height() >= altura

@@ -23,6 +23,10 @@ class Jogador:
     cor: tuple[int, int, int] = (255, 255, 255)
     numero: int = 0
 
+    #: Desempate quando duas coisas têm a mesma base. A vegetação usa 1 e ganha
+    #: do jogador, de modo que pisar dentro dela a deixa por cima.
+    ordem_no_empate = 0
+
     def __init__(self, x: int, y: int, personagem: Personagem):
         """(x, y) é a posição dos PÉS do personagem, em coordenadas de mundo."""
         self.personagem = personagem
@@ -117,6 +121,12 @@ class Jogador:
                 return
 
     # -------------------------------------------------------------- simulação
+
+    @property
+    def profundidade(self) -> int:
+        """Onde o jogador pisa. É por isto que ele é ordenado no desenho:
+        quem tem a base mais embaixo na tela aparece na frente."""
+        return self.hitbox_entidade.bottom
 
     @property
     def velocidade(self) -> int:

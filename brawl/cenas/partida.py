@@ -303,17 +303,32 @@ class CenaPartida(Cena):
         self._desenhar_hud(superficie, area)
 
     def _desenhar_mundo(self, mundo: pygame.Surface) -> None:
-        """Tudo que vive em coordenadas de mapa."""
+        """Tudo que vive em coordenadas de mapa.
+
+        O chão e a água são o fundo. Vegetação, itens e jogadores são desenhados
+        na ordem da base de cada um: quem pisa mais embaixo na tela aparece na
+        frente. É o que faz a grama cobrir quem está atrás dela e ficar atrás de
+        quem passa na frente — e, de brinde, faz os dois jogadores se
+        sobreporem corretamente em vez de o P2 estar sempre por cima.
+
+        As balas ficam fora da ordenação: elas voam, não pisam.
+        """
         self.mapa.desenhar(mundo)
 
-        for item in self.itens:
-            item.desenhar(mundo)
-
-        self.jogador1.desenhar(mundo)
-        self.jogador2.desenhar(mundo)
+        for desenhavel in self._por_profundidade():
+            desenhavel.desenhar(mundo)
 
         for bala in self.balas:
             bala.desenhar(mundo)
+
+    def _por_profundidade(self):
+        desenhaveis = [
+            *self.mapa.faixas_de_vegetacao,
+            *self.itens,
+            self.jogador1,
+            self.jogador2,
+        ]
+        return sorted(desenhaveis, key=lambda d: (d.profundidade, d.ordem_no_empate))
 
     def _desenhar_hud(self, superficie: pygame.Surface, area: pygame.Rect) -> None:
         """Desenhado depois da escala, em resolução cheia, para não borrar.
