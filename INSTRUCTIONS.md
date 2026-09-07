@@ -25,6 +25,19 @@
    do repositório. Isso é o que garante que os caminhos de assets funcionem
    independentemente de onde o comando foi chamado.
 
+## Testes
+
+    pip install -r requirements-dev.txt
+    python -m pytest
+
+A suíte roda headless (`SDL_VIDEODRIVER=dummy`), sem abrir janela — serve para
+terminal e para CI. São ~130 testes em cerca de 3 segundos.
+
+A varredura de navegabilidade do mapa fica fora da rodada padrão por ser mais
+pesada. Vale rodá-la sempre que a hitbox dos pés, o mapa ou os spawns mudarem:
+
+    python -m pytest -m lento
+
 ## Controles
 
 |            | Mover       | Atirar |
