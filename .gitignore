@@ -6,3 +6,6 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+
+# Pasta onde o app do Claude deposita arquivos entregues no chat
+Claude outputs/

@@ -1,4 +1,4 @@
-"""Tela de seleção de personagens: cada jogador escolhe e confirma o seu."""
+"""Cena de seleção de personagens: cada jogador escolhe e confirma o seu."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from .. import recursos
 from ..config import tela as config_tela
 from ..mundo.personagem import PERSONAGENS
 from ..render.texto import desenhar_texto_contornado
+from .base import Cena, Trocar, Transicao
 
 COR_BRANCA = (255, 255, 255)
 COR_FUNDO = (15, 15, 20)
@@ -85,42 +86,46 @@ def _carregar_recursos() -> tuple[dict, pygame.Surface | None, pygame.Surface | 
     return fontes, fundo, titulo, sprites
 
 
-def escolher_personagens(superficie: pygame.Surface) -> tuple[str | None, str | None]:
-    """Devolve as chaves escolhidas por P1 e P2, ou (None, None) se o jogador saiu."""
-    relogio = pygame.time.Clock()
-    chaves = list(PERSONAGENS)
-    fontes, fundo, titulo, sprites = _carregar_recursos()
+class CenaSelecao(Cena):
+    def __init__(self):
+        self.chaves = list(PERSONAGENS)
+        self.fontes, self.fundo, self.titulo, self.sprites = _carregar_recursos()
 
-    escolhas = {
-        "P1": _EscolhaDoJogador(
-            0, config_tela.LARGURA // 4, COR_P1,
-            (pygame.K_a, pygame.K_d, pygame.K_SPACE),
-        ),
-        "P2": _EscolhaDoJogador(
-            min(1, len(chaves) - 1), (3 * config_tela.LARGURA) // 4, COR_P2,
-            (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_RETURN),
-        ),
-    }
+        self.escolhas = {
+            "P1": _EscolhaDoJogador(
+                0, config_tela.LARGURA // 4, COR_P1,
+                (pygame.K_a, pygame.K_d, pygame.K_SPACE),
+            ),
+            "P2": _EscolhaDoJogador(
+                min(1, len(self.chaves) - 1), (3 * config_tela.LARGURA) // 4, COR_P2,
+                (pygame.K_LEFT, pygame.K_RIGHT, pygame.K_RETURN),
+            ),
+        }
 
-    while True:
-        for evento in pygame.event.get():
-            if evento.type == pygame.QUIT or (
-                evento.type == pygame.KEYDOWN and evento.key == pygame.K_ESCAPE
-            ):
-                return None, None
-            if evento.type == pygame.KEYDOWN:
-                for escolha in escolhas.values():
-                    escolha.processar(evento.key, len(chaves))
+    def processar_evento(self, evento: pygame.event.Event) -> Transicao | None:
+        if (saida := super().processar_evento(evento)) is not None:
+            return saida
+        if evento.type == pygame.KEYDOWN:
+            for escolha in self.escolhas.values():
+                escolha.processar(evento.key, len(self.chaves))
+        return None
 
-        for escolha in escolhas.values():
+    def atualizar(self, dt: float) -> Transicao | None:
+        for escolha in self.escolhas.values():
             escolha.atualizar()
 
-        if all(escolha.confirmado for escolha in escolhas.values()):
-            return chaves[escolhas["P1"].indice], chaves[escolhas["P2"].indice]
+        if all(escolha.confirmado for escolha in self.escolhas.values()):
+            from .partida import CenaPartida  # importado aqui para evitar ciclo
 
-        _desenhar(superficie, fontes, fundo, titulo, sprites, escolhas, chaves)
-        pygame.display.flip()
-        relogio.tick(config_tela.FPS)
+            return Trocar(CenaPartida(
+                self.chaves[self.escolhas["P1"].indice],
+                self.chaves[self.escolhas["P2"].indice],
+            ))
+        return None
+
+    def desenhar(self, superficie: pygame.Surface) -> None:
+        _desenhar(superficie, self.fontes, self.fundo, self.titulo,
+                  self.sprites, self.escolhas, self.chaves)
 
 
 def _desenhar(superficie, fontes, fundo, titulo, sprites, escolhas, chaves) -> None:
