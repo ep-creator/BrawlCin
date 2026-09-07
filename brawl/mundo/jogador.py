@@ -1,4 +1,9 @@
-"""O jogador: sprites, movimento, colisão com o mapa, vida e munição."""
+"""O jogador: sprites, movimento, colisão com o mapa, vida e munição.
+
+O jogador não lê teclado. Ele recebe um `Comando` por frame (ver brawl.entrada)
+e o executa. É o que torna possível testar movimento sem abrir janela — e o que
+abre espaço para bot, replay e gamepad sem mexer aqui.
+"""
 
 from __future__ import annotations
 
@@ -6,19 +11,20 @@ import pygame
 
 from .. import recursos
 from ..config import gameplay as regras
+from ..entrada import Comando
 from .personagem import Personagem
 
 
 class Jogador:
     """Classe base. Não instanciar diretamente — use `Jogador1` ou `Jogador2`,
-    que definem controles, cor e número."""
+    que definem cor, número e o lado para onde o HUD cresce."""
 
-    # Definido nas subclasses: 1 = HUD cresce para a direita, -1 = para a esquerda
     direcao_hud: int = 1
+    cor: tuple[int, int, int] = (255, 255, 255)
+    numero: int = 0
 
-    def __init__(self, x: int, y: int, personagem: Personagem, controles: dict):
+    def __init__(self, x: int, y: int, personagem: Personagem):
         self.personagem = personagem
-        self.controles = controles
 
         pasta = personagem.pasta_assets
         tamanho = regras.TAMANHO_FRAME_JOGADOR
@@ -35,17 +41,22 @@ class Jogador:
         # self.rect é só para desenho — desenhar() posiciona o sprite por ele.
         self.rect = self.sprite_parado.get_rect(topleft=(x, y))
 
-        # hitbox_entidade: colisão "real" (balas, itens). É ela que se move a
-        # cada frame e dita a posição final de self.rect.
+        # hitbox_entidade: colisão "real" (balas, itens).
         self.hitbox_entidade = self.rect.inflate(*regras.HITBOX_ENTIDADE_AJUSTE)
 
         # hitbox_mapa: faixa fina colada na base da hitbox_entidade, só para
-        # colisão com paredes e água. Não guarda posição própria — é recalculada
-        # a cada frame a partir da hitbox_entidade.
+        # colisão com paredes e água. Recalculada a cada movimento.
         self.hitbox_mapa = pygame.Rect(
             0, 0, self.hitbox_entidade.width, regras.HITBOX_MAPA_ALTURA
         )
-        self._recolar_hitbox_mapa()
+
+        # Posição real, em ponto flutuante. pygame.Rect só guarda inteiro, e
+        # truncar a cada frame quebraria o movimento diagonal: com a direção
+        # normalizada, cada eixo anda 0,707 da velocidade, e 1,41 px por frame
+        # viraria 1 px. Os Rect são a projeção inteira desta posição.
+        self._x = float(self.hitbox_entidade.x)
+        self._y = float(self.hitbox_entidade.y)
+        self._sincronizar_hitboxes()
 
         self.spawn_x = x
         self.spawn_y = y
@@ -64,7 +75,9 @@ class Jogador:
 
     # ------------------------------------------------------------------ mapa
 
-    def _recolar_hitbox_mapa(self) -> None:
+    def _sincronizar_hitboxes(self) -> None:
+        """Projeta a posição em float nos Rect inteiros."""
+        self.hitbox_entidade.topleft = (round(self._x), round(self._y))
         self.hitbox_mapa.midbottom = self.hitbox_entidade.midbottom
 
     def _colide_com_mapa(self, mapa) -> bool:
@@ -93,45 +106,42 @@ class Jogador:
     def velocidade(self) -> int:
         return self.personagem.velocidade + self.bonus_velocidade
 
-    def mover(self, mapa) -> None:
-        teclas = pygame.key.get_pressed()
+    def mover(self, comando: Comando, mapa) -> None:
+        """Executa o comando deste frame, resolvendo colisão eixo a eixo.
+
+        Um eixo de cada vez para que bater numa parede na horizontal não trave
+        o movimento vertical — é o que permite deslizar rente à parede.
+        """
+        self.indo_esquerda = comando.dx < 0
+        self.indo_direita = comando.dx > 0
+        self.indo_cima = comando.dy < 0
+        self.indo_baixo = comando.dy > 0
+
         velocidade = self.velocidade
 
-        # --- Eixo X ---
-        x_anterior = self.hitbox_entidade.x
-        if teclas[self.controles["esquerda"]]:
-            self.hitbox_entidade.x -= velocidade
-            self.indo_esquerda, self.indo_direita = True, False
-        elif teclas[self.controles["direita"]]:
-            self.hitbox_entidade.x += velocidade
-            self.indo_direita, self.indo_esquerda = True, False
-        else:
-            self.indo_esquerda = self.indo_direita = False
-
-        self._recolar_hitbox_mapa()
+        anterior = self._x
+        self._x += comando.dx * velocidade
+        self._sincronizar_hitboxes()
         if self._colide_com_mapa(mapa):
-            self.hitbox_entidade.x = x_anterior
-            self._recolar_hitbox_mapa()
+            self._x = anterior
+            self._sincronizar_hitboxes()
 
-        # --- Eixo Y ---
-        y_anterior = self.hitbox_entidade.y
-        if teclas[self.controles["cima"]]:
-            self.hitbox_entidade.y -= velocidade
-            self.indo_cima, self.indo_baixo = True, False
-        elif teclas[self.controles["baixo"]]:
-            self.hitbox_entidade.y += velocidade
-            self.indo_baixo, self.indo_cima = True, False
-        else:
-            self.indo_cima = self.indo_baixo = False
-
-        self._recolar_hitbox_mapa()
+        anterior = self._y
+        self._y += comando.dy * velocidade
+        self._sincronizar_hitboxes()
         if self._colide_com_mapa(mapa):
-            self.hitbox_entidade.y = y_anterior
-            self._recolar_hitbox_mapa()
+            self._y = anterior
+            self._sincronizar_hitboxes()
 
         self._atualizar_ocultacao(mapa)
 
         # A posição visual só é atualizada depois que a colisão foi resolvida.
+        self.rect.center = self.hitbox_entidade.center
+
+    def teleportar_para(self, x: float, y: float) -> None:
+        """Reposiciona a hitbox de entidade, mantendo float e Rect coerentes."""
+        self._x, self._y = float(x), float(y)
+        self._sincronizar_hitboxes()
         self.rect.center = self.hitbox_entidade.center
 
     def receber_dano(self, quantidade: int = 1) -> bool:
@@ -146,11 +156,8 @@ class Jogador:
         self.bonus_dano = 0
 
         self.rect.topleft = (self.spawn_x, self.spawn_y)
-        self.hitbox_entidade = self.rect.inflate(*regras.HITBOX_ENTIDADE_AJUSTE)
-        self.hitbox_mapa = pygame.Rect(
-            0, 0, self.hitbox_entidade.width, regras.HITBOX_MAPA_ALTURA
-        )
-        self._recolar_hitbox_mapa()
+        hitbox_no_spawn = self.rect.inflate(*regras.HITBOX_ENTIDADE_AJUSTE)
+        self.teleportar_para(*hitbox_no_spawn.topleft)
 
     # ---------------------------------------------------------------- desenho
 
@@ -196,12 +203,16 @@ class Jogador:
                 border_radius=1,
             )
 
-        texto = recursos.fonte(12, negrito=True).render(f"P{self.numero}", True, (255, 255, 255))
+        texto = recursos.fonte(12, negrito=True).render(
+            f"P{self.numero}", True, (255, 255, 255)
+        )
         largura_fundo, altura_fundo = texto.get_width() + 8, 12
         x = self.rect.centerx - largura_fundo // 2
         y = y_inicial - 15
 
-        pygame.draw.rect(superficie, self.cor, (x, y, largura_fundo, altura_fundo), border_radius=1)
+        pygame.draw.rect(
+            superficie, self.cor, (x, y, largura_fundo, altura_fundo), border_radius=1
+        )
         superficie.blit(texto, (x + 4, y + 2))
 
     def desenhar_hud(self, superficie: pygame.Surface, x: int, y: int) -> None:
@@ -232,7 +243,8 @@ class Jogador:
             )
 
         texto_bonus = fonte_bonus.render(
-            f"Dano: +{self.bonus_dano}  Vel: +{self.bonus_velocidade}", True, (255, 255, 255)
+            f"Dano: +{self.bonus_dano}  Vel: +{self.bonus_velocidade}",
+            True, (255, 255, 255),
         )
         if d == 1:
             superficie.blit(texto_bonus, (x, y + 16))
@@ -242,25 +254,11 @@ class Jogador:
 
 class Jogador1(Jogador):
     direcao_hud = 1
-
-    def __init__(self, x: int, y: int, personagem: Personagem):
-        super().__init__(x, y, personagem, controles={
-            "esquerda": pygame.K_a, "direita": pygame.K_d,
-            "cima": pygame.K_w, "baixo": pygame.K_s,
-            "atirar": pygame.K_SPACE,
-        })
-        self.cor = (0, 0, 255)
-        self.numero = 1
+    cor = (0, 0, 255)
+    numero = 1
 
 
 class Jogador2(Jogador):
     direcao_hud = -1
-
-    def __init__(self, x: int, y: int, personagem: Personagem):
-        super().__init__(x, y, personagem, controles={
-            "esquerda": pygame.K_LEFT, "direita": pygame.K_RIGHT,
-            "cima": pygame.K_UP, "baixo": pygame.K_DOWN,
-            "atirar": pygame.K_RETURN,
-        })
-        self.cor = (255, 0, 0)
-        self.numero = 2
+    cor = (255, 0, 0)
+    numero = 2
