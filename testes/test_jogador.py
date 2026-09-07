@@ -7,6 +7,7 @@ import math
 import pygame
 import pytest
 
+from brawl.config import depuracao
 from brawl.config import gameplay as regras
 from brawl.entrada import Comando, normalizar
 from brawl.mundo.jogador import Jogador1, Jogador2
@@ -197,15 +198,16 @@ class TestOcultacao:
         fazendo o teste passar sem testar nada.
         """
         jogador = Jogador1(50, 110, personagem)
+        jogador.modo_de_teste = False   # no modo de teste ele nunca some de vez
         tela = pygame.Surface((100, 120))
 
         tela.fill((0, 0, 0))
-        jogador.escondido = False
+        jogador.fracao_oculta = 0.0
         jogador.desenhar(tela)
         visivel = pygame.transform.average_color(tela)
 
         tela.fill((0, 0, 0))
-        jogador.escondido = True
+        jogador.fracao_oculta = 1.0
         jogador.desenhar(tela)
         oculto = pygame.transform.average_color(tela)
 
@@ -260,3 +262,90 @@ class TestIdentidadeDosJogadores:
         """O acoplamento que o refactor da entrada removeu."""
         jogador = Jogador1(0, 0, personagem)
         assert not hasattr(jogador, "controles")
+
+
+class TestCoberturaSomada:
+    """A cobertura soma as áreas de vegetação, em vez de olhar uma a uma.
+
+    Antes bastava um único arbusto passar de 50%: quem estivesse na junção de
+    dois, com 30% em cada, ficava visível apesar de 60% coberto. As áreas vêm
+    da fusão de tiles e não se sobrepõem, então somar é exato.
+    """
+
+    def test_dois_arbustos_parciais_somam(self, personagem):
+        jogador = Jogador1(300, 400, personagem)
+        corpo = jogador.hitbox_entidade
+        terco = corpo.width // 3
+        esquerda = pygame.Rect(corpo.left, corpo.top, terco, corpo.height)
+        direita = pygame.Rect(corpo.right - terco, corpo.top, terco, corpo.height)
+
+        jogador._atualizar_ocultacao(MapaFalso(arbustos=[esquerda]))
+        assert not jogador.escondido
+
+        jogador._atualizar_ocultacao(MapaFalso(arbustos=[esquerda, direita]))
+        assert jogador.fracao_oculta == pytest.approx(2 / 3, abs=0.05)
+        assert jogador.escondido
+
+    def test_a_fracao_nunca_passa_de_um(self, personagem):
+        jogador = Jogador1(300, 400, personagem)
+        enorme = pygame.Rect(0, 0, 5000, 5000)
+        jogador._atualizar_ocultacao(MapaFalso(arbustos=[enorme, enorme]))
+        assert jogador.fracao_oculta == 1.0
+
+
+class TestOpacidadeNoModoDeTeste:
+    """No modo de teste o jogador não some: fica translúcido."""
+
+    @pytest.mark.parametrize("fracao,opacidade", [
+        (0.0, 1.0), (0.25, 1.0), (0.49, 1.0),   # antes do limite, cheio
+        (0.5, 1.0),                              # no limite, começa a cair
+    ])
+    def test_fora_da_grama_fica_opaco(self, personagem, fracao, opacidade):
+        jogador = Jogador1(300, 400, personagem)
+        jogador.fracao_oculta = fracao
+        assert jogador.opacidade == pytest.approx(opacidade)
+
+    def test_cai_gradualmente_depois_do_limite(self, personagem):
+        jogador = Jogador1(300, 400, personagem)
+        anteriores = []
+        for fracao in (0.5, 0.6, 0.7, 0.8, 0.9, 1.0):
+            jogador.fracao_oculta = fracao
+            anteriores.append(jogador.opacidade)
+        assert anteriores == sorted(anteriores, reverse=True)
+        assert anteriores[0] == pytest.approx(1.0)
+
+    def test_nunca_chega_a_zero(self, personagem):
+        """O objetivo do modo de teste é ver o que está acontecendo."""
+        jogador = Jogador1(300, 400, personagem)
+        jogador.fracao_oculta = 1.0
+        assert jogador.opacidade == pytest.approx(depuracao.OPACIDADE_MINIMA_DO_JOGADOR)
+        assert jogador.opacidade > 0
+
+    def test_desenha_retangulos_e_nao_sprite(self, personagem):
+        """O corpo vira um bloco cheio da cor do jogador."""
+        jogador = Jogador1(50, 110, personagem)
+        jogador.modo_de_teste = True
+        jogador.fracao_oculta = 0.0
+        tela = pygame.Surface((100, 120))
+        tela.fill((0, 0, 0))
+        jogador.desenhar(tela)
+        assert tela.get_at(jogador.hitbox_entidade.center)[:3] == jogador.cor
+
+    def test_translucido_dentro_da_grama(self, personagem):
+        jogador = Jogador1(50, 110, personagem)
+        jogador.modo_de_teste = True
+        tela = pygame.Surface((100, 120))
+
+        tela.fill((0, 0, 0))
+        jogador.fracao_oculta = 0.0
+        jogador.desenhar(tela)
+        cheio = tela.get_at(jogador.hitbox_entidade.center)[:3]
+
+        tela.fill((0, 0, 0))
+        jogador.fracao_oculta = 1.0
+        jogador.desenhar(tela)
+        apagado = tela.get_at(jogador.hitbox_entidade.center)[:3]
+
+        assert apagado != cheio
+        assert apagado != (0, 0, 0)      # ainda visível
+        assert sum(apagado) < sum(cheio)  # mas mais fraco

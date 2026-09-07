@@ -238,3 +238,72 @@ class TestOrdemDeDesenho:
             (f.profundidade - altura) // altura for f in partida.mapa.faixas_de_vegetacao
         }
         assert linhas_das_faixas == linhas_da_camada
+
+
+class TestModoDeTeste:
+    """Desenho por retângulos e ocultação por opacidade, alternáveis com F1."""
+
+    def test_a_cena_propaga_o_modo_para_os_jogadores(self, partida):
+        for jogador in (partida.jogador1, partida.jogador2):
+            assert jogador.modo_de_teste == partida.modo_de_teste
+
+    def test_f1_alterna_e_propaga(self, partida):
+        antes = partida.modo_de_teste
+        partida.processar_evento(
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F1)
+        )
+        assert partida.modo_de_teste is not antes
+        for jogador in (partida.jogador1, partida.jogador2):
+            assert jogador.modo_de_teste == partida.modo_de_teste
+
+    def test_f1_nao_dispara_nem_transiciona(self, partida):
+        transicao = partida.processar_evento(
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F1)
+        )
+        assert transicao is None
+        assert partida.balas == []
+
+    def test_quem_esta_no_mato_sai_da_ordenacao(self, partida):
+        """Ele é desenhado depois, junto com a janela que clareia a grama."""
+        partida.modo_de_teste = True
+        partida._propagar_modo_de_teste()
+        arbusto = partida.mapa.arbustos[0]
+        partida.jogador1.teleportar_para(arbusto.centerx, arbusto.bottom)
+        partida.jogador1._atualizar_ocultacao(partida.mapa)
+
+        assert partida._tem_janela(partida.jogador1)
+        assert not partida._tem_janela(partida.jogador2) or partida.jogador2.fracao_oculta > 0
+
+    def test_sem_modo_de_teste_ninguem_tem_janela(self, partida):
+        partida.modo_de_teste = False
+        partida._propagar_modo_de_teste()
+        arbusto = partida.mapa.arbustos[0]
+        partida.jogador1.teleportar_para(arbusto.centerx, arbusto.bottom)
+        partida.jogador1._atualizar_ocultacao(partida.mapa)
+        assert not partida._tem_janela(partida.jogador1)
+
+    def test_a_janela_clareia_a_vegetacao(self, partida):
+        """A grama ao redor perde opacidade e o chão reaparece por baixo."""
+        partida.modo_de_teste = True
+        partida._propagar_modo_de_teste()
+        arbusto = max(partida.mapa.arbustos, key=lambda a: a.width * a.height)
+        partida.jogador1.teleportar_para(arbusto.centerx, arbusto.bottom)
+        partida.jogador1._atualizar_ocultacao(partida.mapa)
+
+        mundo = partida.camera.mundo
+        partida.mapa.desenhar(mundo)
+        for faixa in partida.mapa.faixas_de_vegetacao:
+            faixa.desenhar(mundo)
+        com_grama = mundo.copy()
+
+        partida._clarear_vegetacao_ao_redor(mundo, partida.jogador1)
+
+        ponto = (arbusto.centerx, arbusto.centery)
+        assert mundo.get_at(ponto) != com_grama.get_at(ponto)
+
+    def test_a_janela_nao_estoura_a_borda_do_mapa(self, partida):
+        """Um jogador no canto não pode fazer o recorte sair do mundo."""
+        partida.modo_de_teste = True
+        partida.jogador1.teleportar_para(5, 10)
+        partida.jogador1.fracao_oculta = 1.0
+        partida._clarear_vegetacao_ao_redor(partida.camera.mundo, partida.jogador1)

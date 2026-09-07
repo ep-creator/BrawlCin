@@ -12,13 +12,3 @@ Claude outputs/
 
 # pytest
 .pytest_cache/
-
-# Arquivos já removidos do repositório mas que continuam no disco, porque esta
-# sessão não tem permissão de exclusão. Ignorados para que um `git add -A` não
-# os traga de volta. APAGUE OS SEIS E REMOVA ESTE BLOCO.
-assets/mapa_brawl.tmx
-assets/Map (10).png
-assets/tile.tsx
-assets/tile.png
-assets/tile2.tsx
-assets/tile2.png
