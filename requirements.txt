@@ -1,0 +1,9 @@
+# Dependências de execução do jogo.
+#   python -m venv .venv
+#   .venv\Scripts\Activate.ps1     (Windows)   |   source .venv/bin/activate  (Linux/macOS)
+#   pip install -r requirements.txt
+#
+# Rodar:  python -m brawl
+
+pygame>=2.5,<3
+PyTMX>=3.32,<4

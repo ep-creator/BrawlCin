@@ -1,0 +1,19 @@
+# O repositório guarda SEMPRE fim de linha LF, e o checkout também escreve LF.
+# Sem isto, um clone no Windows deixa `git status` permanentemente sujo:
+# antes deste arquivo, os 16 arquivos do projeto apareciam como modificados
+# com 1.278 linhas de diff que eram só CRLF vs LF.
+* text=auto eol=lf
+
+# Binários: nunca converter.
+*.png  binary
+*.jpg  binary
+*.ttf  binary
+*.otf  binary
+*.wav  binary
+*.ogg  binary
+
+# Texto explícito (o .tmx é XML, versionar como texto ajuda no diff do mapa).
+*.py   text eol=lf
+*.md   text eol=lf
+*.tmx  text eol=lf
+*.json text eol=lf
