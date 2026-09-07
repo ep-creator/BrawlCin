@@ -45,7 +45,13 @@ pesada. Vale rodá-la sempre que a hitbox dos pés, o mapa ou os spawns mudarem:
 | Player 1   | W A S D     | ESPAÇO |
 | Player 2   | setas       | ENTER  |
 
-`ESC` sai. No fim do campeonato, `R` reinicia e `T` volta para a seleção.
+`ESC` recua um passo, e o que é "um passo atrás" muda conforme a tela: na
+partida abre a **pausa**, na seleção volta ao menu, nas sobreposições fecha. No
+menu ele pergunta antes de encerrar.
+
+A pausa tem voltar ao jogo, controles, reiniciar, trocar personagens, menu
+principal e sair. O fim de campeonato é o mesmo tipo de menu — os antigos
+atalhos `R` e `T` deixaram de existir.
 
 A tela de **Controles**, no menu, mostra estas mesmas teclas lendo os controles
 de verdade — se um dia forem remapeados, ela acompanha.
@@ -100,9 +106,12 @@ estado inicial e os ajustes ficam em `brawl/config/depuracao.py`.
 - [x] ~~**Menu**~~ — feito. Abertura leva ao menu (Jogar / Controles / Sair),
       navegável pelos dois teclados. Falta avaliar se vale uma tela de créditos.
 - [ ] **Animação de seleção** + redesenhar a tela de seleção.
-- [ ] **Animação de vitória / fim de round** + redesenhar as duas telas. Já são
-      cenas separadas (`cenas/sobreposicao.py`), dá para animá-las sem tocar na
-      partida.
+- [ ] **Animação de vitória / fim de round**. O fim de campeonato já virou menu
+      navegável (`cenas/fim_de_jogo.py`); falta a animação, e falta redesenhar o
+      véu de fim de rodada, que continua sendo texto sobre véu.
+- [ ] **Transições entre cenas** — menu → seleção e seleção → partida entram
+      secas. A sugestão é implementá-las no App, que já é o único dono das
+      trocas, em vez de como cena intermediária.
 - [ ] Melhorar o placar.
 - [ ] HUD: melhorar a vida; trocar o texto dos bônus por ícone com contagem.
       Hoje usa fontes de 12 a 20 px herdadas de uma janela bem menor, desenhadas

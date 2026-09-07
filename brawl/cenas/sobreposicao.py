@@ -28,6 +28,7 @@ class CenaSobreposicao(Cena):
         linhas: list[str],
         acoes: dict[int, Callable[[], Transicao | None]],
         tamanho_titulo: int = 42,
+        ao_cancelar: Callable[[], Transicao | None] | None = None,
     ):
         self.titulo = titulo
         self.cor_titulo = cor_titulo
@@ -36,12 +37,17 @@ class CenaSobreposicao(Cena):
         self.linhas = linhas
         self.acoes = acoes
         self.tamanho_titulo = tamanho_titulo
+        self.ao_cancelar = ao_cancelar
         self._veu: pygame.Surface | None = None
 
     def processar_evento(self, evento: pygame.event.Event) -> Transicao | None:
-        if (saida := super().processar_evento(evento)) is not None:
-            return saida
-        if evento.type == pygame.KEYDOWN and evento.key in self.acoes:
+        if evento.type != pygame.KEYDOWN:
+            return None
+        if evento.key == pygame.K_ESCAPE and self.ao_cancelar is not None:
+            return self.ao_cancelar()
+        if evento.key == pygame.K_ESCAPE:
+            return super().processar_evento(evento)
+        if evento.key in self.acoes:
             return self.acoes[evento.key]()
         return None
 

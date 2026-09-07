@@ -166,11 +166,15 @@ class TestCampeonato:
         assert isinstance(veu, CenaSobreposicao)
         assert "RODADA" in veu.titulo
 
-    def test_o_ponto_decisivo_encerra_o_jogo(self, partida):
+    def test_o_ponto_decisivo_abre_o_menu_de_fim_de_jogo(self, partida):
+        from brawl.cenas.fim_de_jogo import CenaFimDeJogo
+
         for _ in range(regras.PONTOS_PARA_VENCER_CAMPEONATO):
             partida._pontuar(vencedor=2)
-        veu = partida._transicao_pendente.cena
-        assert "JOGO" in veu.titulo
+        cena = partida._transicao_pendente.cena
+        assert isinstance(cena, CenaFimDeJogo)
+        assert cena.vencedor == 2
+        assert "2" in cena.titulo
 
     def test_a_regra_vem_da_configuracao(self, partida):
         """O game.py antigo comparava com 2 enquanto a config dizia 3."""
@@ -181,7 +185,7 @@ class TestCampeonato:
     def test_reiniciar_rodada_preserva_o_placar(self, partida):
         partida._pontuar(vencedor=1)
         partida.jogador1.vida = 1
-        partida._reiniciar_rodada()
+        partida.reiniciar_rodada()
         assert partida.pontos[1] == 1
         assert partida.jogador1.vida == partida.jogador1.personagem.vida_maxima
         assert partida.balas == []
@@ -331,3 +335,85 @@ class TestModoDeTeste:
         partida.jogador1.teleportar_para(5, 10)
         partida.jogador1.fracao_oculta = 1.0
         partida._clarear_vegetacao_ao_redor(partida.camera.mundo, partida.jogador1)
+
+
+class TestPausa:
+    """ESC na partida abre a pausa, que congela o jogo por estar no topo."""
+
+    def test_esc_empilha_a_pausa(self, app, partida):
+        from brawl.cenas.pausa import CenaPausa
+
+        app.pilha = [partida]
+        teclar(pygame.K_ESCAPE)
+        avancar_frame(app)
+        assert isinstance(app.topo, CenaPausa)
+        assert app.pilha[0] is partida
+
+    def test_a_partida_congela_sob_a_pausa(self, app, partida):
+        app.pilha = [partida]
+        teclar(pygame.K_ESCAPE)
+        avancar_frame(app)
+        posicao = partida.jogador1.hitbox_entidade.midbottom
+        for _ in range(20):
+            avancar_frame(app)
+        assert partida.jogador1.hitbox_entidade.midbottom == posicao
+
+    def test_a_pausa_nao_consome_a_recarga(self, app, partida):
+        """O motivo de a recarga ter deixado de usar relógio de parede."""
+        for _ in range(regras.BALAS_MAXIMAS):
+            partida._tentar_atirar(partida.jogador1, partida.jogador2, COR_BALA_P1)
+        app.pilha = [partida]
+        teclar(pygame.K_ESCAPE)
+        avancar_frame(app)
+        for _ in range(200):
+            avancar_frame(app)
+        assert partida.jogador1.balas == 0
+        assert partida.recarga_restante[1] == regras.TEMPO_RECARGA
+
+    def test_voltar_ao_jogo_devolve_a_partida(self, app, partida):
+        app.pilha = [partida]
+        teclar(pygame.K_ESCAPE)
+        avancar_frame(app)
+        teclar(pygame.K_RETURN)          # primeira opção: VOLTAR AO JOGO
+        avancar_frame(app)
+        assert app.topo is partida
+        assert len(app.pilha) == 1
+
+    def test_reiniciar_zera_o_placar_sem_sair_da_partida(self, app, partida):
+        from brawl.cenas.pausa import CenaPausa
+
+        partida.pontos = {1: 2, 2: 1}
+        pausa = CenaPausa(partida)
+        app.pilha = [partida, pausa]
+        pausa.indice = 2                 # REINICIAR JOGO
+        teclar(pygame.K_RETURN)
+        avancar_frame(app)
+        assert partida.pontos == {1: 0, 2: 0}
+        assert app.topo is partida
+
+    @pytest.mark.parametrize("indice,esperada", [
+        (3, "CenaSelecao"),
+        (4, "CenaMenu"),
+    ])
+    def test_trocar_e_menu_descartam_a_partida(self, app, partida, indice, esperada):
+        """SubstituirPilha: nem a pausa nem a partida podem sobrar embaixo."""
+        from brawl.cenas.pausa import CenaPausa
+
+        pausa = CenaPausa(partida)
+        app.pilha = [partida, pausa]
+        pausa.indice = indice
+        teclar(pygame.K_RETURN)
+        avancar_frame(app)
+        assert type(app.topo).__name__ == esperada
+        assert len(app.pilha) == 1
+
+    def test_sair_pergunta_antes(self, app, partida):
+        from brawl.cenas.confirmacao import CenaConfirmacao
+        from brawl.cenas.pausa import CenaPausa
+
+        pausa = CenaPausa(partida)
+        app.pilha = [partida, pausa]
+        pausa.indice = 5                 # SAIR DO JOGO
+        teclar(pygame.K_RETURN)
+        avancar_frame(app)
+        assert isinstance(app.topo, CenaConfirmacao)

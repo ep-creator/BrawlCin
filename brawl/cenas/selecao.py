@@ -103,8 +103,11 @@ class CenaSelecao(Cena):
         }
 
     def processar_evento(self, evento: pygame.event.Event) -> Transicao | None:
-        if (saida := super().processar_evento(evento)) is not None:
-            return saida
+        if evento.type == pygame.KEYDOWN and evento.key == pygame.K_ESCAPE:
+            from .menu import CenaMenu  # importado aqui para evitar ciclo
+
+            # ESC recua um passo: aqui o passo atrás é o menu, não sair do jogo.
+            return Trocar(CenaMenu())
         if evento.type == pygame.KEYDOWN:
             for escolha in self.escolhas.values():
                 escolha.processar(evento.key, len(self.chaves))

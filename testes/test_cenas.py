@@ -14,7 +14,9 @@ from brawl.cenas.base import (
     SubstituirPilha,
     Trocar,
 )
+from brawl.cenas.confirmacao import CenaConfirmacao
 from brawl.cenas.controles import CenaControles, nome_da_tecla
+from brawl.cenas.fim_de_jogo import CenaFimDeJogo
 from brawl.cenas.menu import CenaMenu
 from brawl.cenas.partida import CenaPartida
 from brawl.cenas.selecao import CenaSelecao
@@ -177,29 +179,33 @@ class TestFimDeRodadaEDeJogo:
         assert app.topo is partida
         assert partida.jogador1.vida == partida.jogador1.personagem.vida_maxima
 
-    def test_r_reinicia_o_campeonato(self, app):
+    def test_jogar_de_novo_zera_o_placar(self, app):
+        """Era o atalho R, escondido numa instrução na tela. Agora é uma opção."""
         partida = CenaPartida("shelly", "colt")
         app.pilha = [partida]
         for _ in range(regras.PONTOS_PARA_VENCER_CAMPEONATO):
             partida._pontuar(vencedor=2)
         avancar_frame(app)
-        teclar(pygame.K_r)
+        assert isinstance(app.topo, CenaFimDeJogo)
+
+        teclar(pygame.K_RETURN)          # primeira opção: JOGAR DE NOVO
         avancar_frame(app)
         assert app.topo is partida
         assert partida.pontos == {1: 0, 2: 0}
 
-    def test_t_volta_para_a_selecao_sem_empilhar_partida(self, app):
-        """A tecla T instanciava um Game dentro do laço de eventos do anterior.
+    def test_trocar_personagens_descarta_a_partida(self, app):
+        """Era o atalho T, que instanciava um Game dentro do laço do anterior.
 
-        Hoje o véu devolve SubstituirPilha, então a troca é imediata: um frame,
-        e nem o véu nem a partida sobram na pilha.
+        Hoje é uma opção do menu e devolve SubstituirPilha: nem a tela de fim de
+        jogo nem a partida sobram.
         """
         partida = CenaPartida("shelly", "colt")
         app.pilha = [partida]
         for _ in range(regras.PONTOS_PARA_VENCER_CAMPEONATO):
             partida._pontuar(vencedor=1)
         avancar_frame(app)
-        teclar(pygame.K_t)
+        app.topo.indice = 1              # TROCAR PERSONAGENS
+        teclar(pygame.K_RETURN)
         avancar_frame(app)
         assert isinstance(app.topo, CenaSelecao)
         assert len(app.pilha) == 1
@@ -214,15 +220,98 @@ class TestFimDeRodadaEDeJogo:
         assert canto != partida.camera.cor_das_barras
 
 
-@pytest.mark.parametrize("construtor", [
-    CenaAbertura,
-    CenaSelecao,
-    lambda: CenaPartida("shelly", "colt"),
-])
-def test_esc_encerra_de_qualquer_cena(app, construtor):
-    app.pilha = [construtor()]
-    teclar(pygame.K_ESCAPE)
-    assert avancar_frame(app) is False
+class TestRegraDoEsc:
+    """ESC recua um passo. O que é "um passo atrás" muda conforme a cena.
+
+    Antes ESC encerrava o jogo de qualquer lugar, inclusive no meio de uma
+    partida — a tecla mais fácil de apertar sem querer era também a que fechava
+    tudo.
+    """
+
+    @staticmethod
+    def _esc(cena):
+        return cena.processar_evento(
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        )
+
+    def test_na_abertura_encerra(self):
+        """Não há passo atrás: a abertura é a primeira tela."""
+        assert isinstance(self._esc(CenaAbertura()), Sair)
+
+    def test_no_menu_pergunta(self):
+        transicao = self._esc(CenaMenu())
+        assert isinstance(transicao, Empilhar)
+        assert isinstance(transicao.cena, CenaConfirmacao)
+
+    def test_na_confirmacao_cancela(self):
+        """A tecla de recuar não pode encerrar a pergunta que protege do recuo."""
+        assert isinstance(self._esc(CenaConfirmacao()), Desempilhar)
+
+    def test_nos_controles_volta(self):
+        assert isinstance(self._esc(CenaControles()), Desempilhar)
+
+    def test_na_selecao_volta_ao_menu(self):
+        transicao = self._esc(CenaSelecao())
+        assert isinstance(transicao, Trocar)
+        assert isinstance(transicao.cena, CenaMenu)
+
+    def test_na_partida_abre_a_pausa(self):
+        from brawl.cenas.pausa import CenaPausa
+
+        transicao = self._esc(CenaPartida("shelly", "colt"))
+        assert isinstance(transicao, Empilhar)
+        assert isinstance(transicao.cena, CenaPausa)
+
+    def test_na_pausa_volta_ao_jogo(self):
+        from brawl.cenas.pausa import CenaPausa
+
+        assert isinstance(self._esc(CenaPausa(CenaPartida("shelly", "colt"))),
+                          Desempilhar)
+
+    def test_no_fim_de_rodada_abre_a_pausa(self, app):
+        from brawl.cenas.pausa import CenaPausa
+
+        partida = CenaPartida("shelly", "colt")
+        partida._pontuar(vencedor=1)
+        veu = partida._transicao_pendente.cena
+        transicao = self._esc(veu)
+        assert isinstance(transicao, Empilhar)
+        assert isinstance(transicao.cena, CenaPausa)
+
+    def test_no_fim_de_jogo_vai_para_o_menu(self):
+        """A partida acabou: não há jogo para voltar."""
+        partida = CenaPartida("shelly", "colt")
+        transicao = self._esc(CenaFimDeJogo(partida, vencedor=1))
+        assert isinstance(transicao, SubstituirPilha)
+        assert isinstance(transicao.cena, CenaMenu)
+
+
+class TestConfirmacaoDeSaida:
+    def test_sim_encerra(self, app):
+        confirmacao = CenaConfirmacao()
+        confirmacao.indice = 1           # SIM
+        transicao = confirmacao.processar_evento(
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
+        )
+        assert isinstance(transicao, Sair)
+
+    def test_nao_volta(self, app):
+        confirmacao = CenaConfirmacao()
+        confirmacao.indice = 0           # NÃO
+        transicao = confirmacao.processar_evento(
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
+        )
+        assert isinstance(transicao, Desempilhar)
+
+    def test_comeca_no_nao(self):
+        """A opção destrutiva não pode ser a que já está sob o cursor."""
+        assert CenaConfirmacao().opcoes[CenaConfirmacao().indice].rotulo == "NÃO"
+
+    def test_e_transparente(self, app):
+        menu = CenaMenu()
+        app.pilha = [menu, CenaConfirmacao()]
+        app._desenhar()
+        assert app.topo.transparente is True
 
 
 class TestMenu:
@@ -271,19 +360,14 @@ class TestMenu:
         assert isinstance(transicao, Empilhar)
         assert isinstance(transicao.cena, CenaControles)
 
-    def test_sair_encerra(self):
+    def test_sair_pergunta_antes(self):
         menu = CenaMenu()
         menu.indice = 2
         transicao = menu.processar_evento(
             pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
         )
-        assert isinstance(transicao, Sair)
-
-    def test_esc_encerra(self):
-        transicao = CenaMenu().processar_evento(
-            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
-        )
-        assert isinstance(transicao, Sair)
+        assert isinstance(transicao, Empilhar)
+        assert isinstance(transicao.cena, CenaConfirmacao)
 
     def test_o_fluxo_inteiro_do_menu_ate_a_partida(self, app):
         """Menu -> seleção -> partida, sem acumular cena na pilha."""

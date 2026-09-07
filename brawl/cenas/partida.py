@@ -22,16 +22,16 @@ from ..mundo.mapa import Mapa
 from ..mundo.personagem import PERSONAGENS
 from ..mundo.projetil import Projetil
 from ..render.camera import Camera
-from .base import Cena, Desempilhar, Empilhar, SubstituirPilha, Transicao
+from .base import Cena, Desempilhar, Empilhar, Transicao
+from .fim_de_jogo import CenaFimDeJogo
+from .pausa import CenaPausa
 from .sobreposicao import CenaSobreposicao
 
 COR_BALA_P1 = (0, 150, 255)
 COR_BALA_P2 = (255, 50, 50)
 
 COR_VEU_RODADA = (10, 10, 20)
-COR_VEU_JOGO = (0, 0, 0)
 COR_TITULO_RODADA = (255, 140, 0)
-COR_TITULO_JOGO = (0, 255, 128)
 
 
 class CenaPartida(Cena):
@@ -119,11 +119,13 @@ class CenaPartida(Cena):
     # ---------------------------------------------------------------- eventos
 
     def processar_evento(self, evento: pygame.event.Event) -> Transicao | None:
-        if (saida := super().processar_evento(evento)) is not None:
-            return saida
-
         if evento.type != pygame.KEYDOWN:
             return None
+
+        if evento.key == pygame.K_ESCAPE:
+            # ESC recua um passo: da partida, o passo atrás é a pausa. Empilhar
+            # já congela o jogo, porque o App só atualiza a cena do topo.
+            return Empilhar(CenaPausa(self))
 
         if evento.key == pygame.K_F1:
             self.modo_de_teste = not self.modo_de_teste
@@ -188,7 +190,7 @@ class CenaPartida(Cena):
         self.pontos[vencedor] += 1
 
         if self.pontos[vencedor] >= regras.PONTOS_PARA_VENCER_CAMPEONATO:
-            self._transicao_pendente = Empilhar(self._veu_de_fim_de_jogo(vencedor))
+            self._transicao_pendente = Empilhar(CenaFimDeJogo(self, vencedor))
         else:
             self._transicao_pendente = Empilhar(self._veu_de_fim_de_rodada(vencedor))
 
@@ -196,7 +198,7 @@ class CenaPartida(Cena):
 
     def _veu_de_fim_de_rodada(self, vencedor: int) -> CenaSobreposicao:
         def proxima_rodada() -> Transicao:
-            self._reiniciar_rodada()
+            self.reiniciar_rodada()
             return Desempilhar()
 
         return CenaSobreposicao(
@@ -206,35 +208,15 @@ class CenaPartida(Cena):
             opacidade=160,
             linhas=["Pressione ESPAÇO para o próximo round"],
             acoes={pygame.K_SPACE: proxima_rodada},
+            ao_cancelar=lambda: Empilhar(CenaPausa(self)),
         )
 
-    def _veu_de_fim_de_jogo(self, vencedor: int) -> CenaSobreposicao:
-        def reiniciar_campeonato() -> Transicao:
-            self.pontos = {1: 0, 2: 0}
-            self._reiniciar_rodada()
-            return Desempilhar()
+    def reiniciar_campeonato(self) -> None:
+        """Zera o placar e recomeça a rodada. Usada pela pausa e pelo fim de jogo."""
+        self.pontos = {1: 0, 2: 0}
+        self.reiniciar_rodada()
 
-        def nova_selecao() -> Transicao:
-            from .selecao import CenaSelecao  # importado aqui para evitar ciclo
-
-            # SubstituirPilha e não Trocar: Trocar substituiria o próprio véu e
-            # deixaria a partida viva embaixo dele.
-            return SubstituirPilha(CenaSelecao())
-
-        return CenaSobreposicao(
-            titulo=f"PLAYER {vencedor} VENCEU O JOGO!",
-            cor_titulo=COR_TITULO_JOGO,
-            cor_veu=COR_VEU_JOGO,
-            opacidade=200,
-            tamanho_titulo=46,
-            linhas=[
-                "Pressione 'R' para reiniciar o campeonato",
-                "Pressione 'T' para selecionar outros personagens",
-            ],
-            acoes={pygame.K_r: reiniciar_campeonato, pygame.K_t: nova_selecao},
-        )
-
-    def _reiniciar_rodada(self) -> None:
+    def reiniciar_rodada(self) -> None:
         self.jogador1.renascer()
         self.jogador2.renascer()
         self.balas.clear()

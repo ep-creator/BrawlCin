@@ -3,6 +3,9 @@
 Renderizadas pelo próprio jogo, em resolução nativa de mundo (960x540).
 
 - `previa-menu.png` — o menu principal.
+- `previa-pausa.png` — a pausa, com a partida congelada atrás.
+- `previa-fim-de-jogo.png` — o fim de campeonato, agora um menu navegável.
+- `previa-confirmacao.png` — a confirmação de saída.
 - `previa-controles.png` — a tela de controles, empilhada sobre o menu.
 - `previa-mapa.png` — um frame como o jogador vê.
 - `previa-colisao.png` — o mesmo frame com as áreas de colisão desenhadas por

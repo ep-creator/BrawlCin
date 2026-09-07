@@ -43,9 +43,18 @@ class CenaMenu(CenaDeOpcoes):
 
     @staticmethod
     def _sair() -> Transicao:
-        from .base import Sair
+        from .confirmacao import CenaConfirmacao
 
-        return Sair()
+        return Empilhar(CenaConfirmacao())
+
+    def _ao_cancelar(self) -> Transicao:
+        """ESC no menu não encerra direto: pergunta.
+
+        É a tecla mais fácil de apertar sem querer, e aqui ela seria a última
+        antes de fechar o jogo. Sair pela opção também pergunta, para não haver
+        dois comportamentos para a mesma decisão.
+        """
+        return self._sair()
 
     # -------------------------------------------------------------- simulação
 

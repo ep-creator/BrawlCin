@@ -48,10 +48,8 @@ LINHAS_DOS_JOGADORES = [
 
 LINHAS_GERAIS = [
     ("ESPAÇO", "Próxima rodada, no fim de uma rodada"),
-    ("R", "Reiniciar o campeonato, no fim do jogo"),
-    ("T", "Escolher outros personagens, no fim do jogo"),
+    ("ESC", "Pausa durante a partida; voltar nas outras telas"),
     ("F1", "Modo de teste: mostra as hitboxes"),
-    ("ESC", "Voltar ou sair"),
 ]
 
 # Colunas escolhidas para o bloco inteiro ficar centrado na tela, e não só o
