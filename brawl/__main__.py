@@ -2,40 +2,25 @@
 
 from __future__ import annotations
 
+import sys
+
 import pygame
 
-from .config import tela as config_tela
-from .jogo import Jogo, ResultadoDaPartida
-from .telas.abertura import mostrar_abertura
-from .telas.selecao import escolher_personagens
+from .app import App
+from .cenas.abertura import CenaAbertura
 
-
-def criar_janela() -> pygame.Surface:
-    bandeiras = pygame.SCALED | (pygame.FULLSCREEN if config_tela.TELA_CHEIA else 0)
-    superficie = pygame.display.set_mode(config_tela.RESOLUCAO, bandeiras)
-    pygame.display.set_caption(config_tela.TITULO)
-    return superficie
+VERSAO_MINIMA_DO_PYTHON = (3, 10)
 
 
 def main() -> None:
+    if sys.version_info < VERSAO_MINIMA_DO_PYTHON:
+        alvo = ".".join(map(str, VERSAO_MINIMA_DO_PYTHON))
+        sys.exit(f"Este jogo precisa do Python {alvo} ou mais novo.")
+
     pygame.init()
     try:
-        superficie = criar_janela()
-
-        if not mostrar_abertura(superficie):
-            return
-
-        # Cada volta é uma ida à seleção de personagens. Antes, trocar de
-        # personagem instanciava um Jogo dentro do laço de eventos do Jogo
-        # anterior — um laço principal empilhado dentro do outro a cada troca.
-        while True:
-            chave_p1, chave_p2 = escolher_personagens(superficie)
-            if chave_p1 is None or chave_p2 is None:
-                return
-
-            resultado = Jogo(superficie, chave_p1, chave_p2).rodar()
-            if resultado is not ResultadoDaPartida.NOVA_SELECAO:
-                return
+        app = App()                 # cria a janela primeiro
+        app.rodar(CenaAbertura())   # só então as cenas podem carregar assets
     finally:
         pygame.quit()
 
