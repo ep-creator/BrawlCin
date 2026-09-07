@@ -13,6 +13,7 @@ import random
 import pygame
 
 from .. import recursos
+from ..config import depuracao
 from ..config import gameplay as regras
 from ..entrada import Comando, TECLADO_P1, TECLADO_P2
 from ..mundo.item import Item
@@ -60,6 +61,11 @@ class CenaPartida(Cena):
 
         self._transicao_pendente: Transicao | None = None
 
+        # A cena é dona do modo de teste e o empurra para os jogadores, em vez
+        # de todo mundo ler uma variável global de configuração.
+        self.modo_de_teste = depuracao.MODO_DE_TESTE
+        self._propagar_modo_de_teste()
+
         self._espalhar_itens()
 
     # ------------------------------------------------------------------ itens
@@ -101,6 +107,10 @@ class CenaPartida(Cena):
                 jogador.bonus_velocidade + 1, regras.BONUS_VELOCIDADE_MAXIMO
             )
 
+    def _propagar_modo_de_teste(self) -> None:
+        for jogador in (self.jogador1, self.jogador2):
+            jogador.modo_de_teste = self.modo_de_teste
+
     # ---------------------------------------------------------------- eventos
 
     def processar_evento(self, evento: pygame.event.Event) -> Transicao | None:
@@ -108,6 +118,11 @@ class CenaPartida(Cena):
             return saida
 
         if evento.type != pygame.KEYDOWN:
+            return None
+
+        if evento.key == pygame.K_F1:
+            self.modo_de_teste = not self.modo_de_teste
+            self._propagar_modo_de_teste()
             return None
 
         # O tiro é por toque, não por tecla segurada: por isso ele nasce de um
@@ -315,11 +330,56 @@ class CenaPartida(Cena):
         """
         self.mapa.desenhar(mundo)
 
+        # No modo de teste, quem está dentro do mato sai da ordenação: ele é
+        # desenhado depois, junto com a janela que clareia a grama ao redor.
+        com_janela = [j for j in self._jogadores() if self._tem_janela(j)]
+
         for desenhavel in self._por_profundidade():
+            if desenhavel in com_janela:
+                continue
             desenhavel.desenhar(mundo)
+
+        for jogador in com_janela:
+            self._clarear_vegetacao_ao_redor(mundo, jogador)
+            jogador.desenhar(mundo)
 
         for bala in self.balas:
             bala.desenhar(mundo)
+
+    def _jogadores(self):
+        return (self.jogador1, self.jogador2)
+
+    def _tem_janela(self, jogador) -> bool:
+        return self.modo_de_teste and jogador.fracao_oculta > 0
+
+    def _clarear_vegetacao_ao_redor(self, mundo: pygame.Surface, jogador) -> None:
+        """Reduz a opacidade da vegetação numa janela em volta do jogador.
+
+        Feito redesenhando o fundo por cima, translúcido: a grama daquela área
+        some parcialmente e o chão reaparece por baixo. É o que permite enxergar
+        para onde se está indo dentro do mato — sem isso, o modo de teste
+        mostraria o jogador translúcido sobre um tapete opaco de folhagem.
+        """
+        raio = depuracao.RAIO_DA_JANELA
+        passos = depuracao.PASSOS_DA_JANELA
+
+        # A janela é montada em anéis concêntricos, cada um repintando o fundo
+        # com uma fatia da opacidade. O efeito acumula em direção ao centro, o
+        # que dá um esmaecimento gradual em vez de um retângulo de borda dura —
+        # que na tela parecia defeito de renderização.
+        alvo = 1.0 - depuracao.OPACIDADE_DA_GRAMA_NA_JANELA
+        alfa_por_passo = round(255 * (1.0 - (1.0 - alvo) ** (1 / passos)))
+
+        for k in range(passos):
+            encolhimento = round(raio * k / passos)
+            anel = jogador.hitbox_entidade.inflate(
+                (raio - encolhimento) * 2, (raio - encolhimento) * 2
+            ).clip(self.mapa.rect)
+            if not anel.width or not anel.height:
+                continue
+            veu = self.mapa.imagem.subsurface(anel).copy()
+            veu.set_alpha(alfa_por_passo)
+            mundo.blit(veu, anel)
 
     def _por_profundidade(self):
         desenhaveis = [

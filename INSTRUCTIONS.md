@@ -47,6 +47,12 @@ pesada. Vale rodá-la sempre que a hitbox dos pés, o mapa ou os spawns mudarem:
 
 `ESC` sai. No fim do campeonato, `R` reinicia e `T` volta para a seleção.
 
+`F1` alterna o **modo de teste**: os personagens viram os retângulos das duas
+hitboxes (corpo cheio na cor do jogador, pés em contorno branco) e a ocultação
+pela vegetação vira opacidade em vez de sumiço — com a grama ao redor clareando
+para dar para ver onde se está indo. Serve para afinar hitboxes e vegetação; o
+estado inicial e os ajustes ficam em `brawl/config/depuracao.py`.
+
 ## Pendências
 
 ### Mapa e arte

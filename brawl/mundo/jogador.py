@@ -10,6 +10,7 @@ from __future__ import annotations
 import pygame
 
 from .. import recursos
+from ..config import depuracao
 from ..config import gameplay as regras
 from ..entrada import Comando
 from .personagem import Personagem
@@ -70,7 +71,12 @@ class Jogador:
         self.bonus_velocidade = 0
         self.bonus_dano = 0
 
-        self.escondido = False
+        #: Fração do corpo coberta por vegetação, de 0 a 1.
+        self.fracao_oculta = 0.0
+        #: Ligado pela cena. No modo de teste o jogador vira retângulos e a
+        #: ocultação vira opacidade, em vez de sumiço.
+        self.modo_de_teste = depuracao.MODO_DE_TESTE
+
         self.indo_esquerda = False
         self.indo_direita = False
         self.indo_cima = False
@@ -108,17 +114,41 @@ class Jogador:
         )
 
     def _atualizar_ocultacao(self, mapa) -> None:
-        """Fica escondido quando metade da hitbox está dentro de um arbusto."""
-        self.escondido = False
-        area_jogador = self.hitbox_entidade.width * self.hitbox_entidade.height
+        """Calcula quanto do corpo está coberto por vegetação.
 
+        A cobertura é SOMADA entre as áreas de vegetação, e não avaliada uma a
+        uma. Antes bastava um único arbusto passar de 50% — quem estivesse na
+        junção de dois, com 30% em cada, ficava visível apesar de 60% coberto.
+        As áreas vêm da fusão de tiles e não se sobrepõem, então somar é exato.
+        """
+        area_jogador = self.hitbox_entidade.width * self.hitbox_entidade.height
+        coberto = 0
         for arbusto in mapa.arbustos:
             if not self.hitbox_entidade.colliderect(arbusto):
                 continue
             intersecao = self.hitbox_entidade.clip(arbusto)
-            if intersecao.width * intersecao.height >= area_jogador * regras.FRACAO_PARA_ESCONDER:
-                self.escondido = True
-                return
+            coberto += intersecao.width * intersecao.height
+
+        self.fracao_oculta = min(1.0, coberto / area_jogador) if area_jogador else 0.0
+
+    @property
+    def escondido(self) -> bool:
+        """Regra de jogo: some da vista do adversário. Vale nos dois modos."""
+        return self.fracao_oculta >= regras.FRACAO_PARA_ESCONDER
+
+    @property
+    def opacidade(self) -> float:
+        """Opacidade de desenho no modo de teste, de 1,0 a OPACIDADE_MINIMA.
+
+        Só começa a cair depois do limite de ocultação: vindo de fora, o jogador
+        continua cheio até estar 50% dentro da grama, e a partir daí some
+        gradualmente em vez de piscar para invisível.
+        """
+        limite = regras.FRACAO_PARA_ESCONDER
+        if self.fracao_oculta < limite:
+            return 1.0
+        avanco = (self.fracao_oculta - limite) / (1.0 - limite) if limite < 1.0 else 1.0
+        return 1.0 - avanco * (1.0 - depuracao.OPACIDADE_MINIMA_DO_JOGADOR)
 
     # -------------------------------------------------------------- simulação
 
@@ -184,6 +214,10 @@ class Jogador:
     # ---------------------------------------------------------------- desenho
 
     def desenhar(self, superficie: pygame.Surface) -> None:
+        if self.modo_de_teste:
+            self._desenhar_como_retangulos(superficie)
+            return
+
         if self.escondido:
             return
 
@@ -210,20 +244,46 @@ class Jogador:
         superficie.blit(sprite, sprite.get_rect(midbottom=self.rect.midbottom))
         self._desenhar_acima_da_cabeca(superficie)
 
-    def _desenhar_acima_da_cabeca(self, superficie: pygame.Surface) -> None:
-        """Munição restante e etiqueta P1/P2, logo acima do sprite."""
-        tamanho, espaco = 5, 3
-        largura_total = regras.BALAS_MAXIMAS * (tamanho + espaco)
-        x_inicial = self.rect.centerx - largura_total // 2
-        y_inicial = self.rect.top - 5
+    def _desenhar_como_retangulos(self, superficie: pygame.Surface) -> None:
+        """Desenho de teste: as duas hitboxes, com a opacidade da ocultação.
 
+        O corpo é o retângulo cheio — é ele que as balas acertam. Os pés são o
+        contorno branco — é ele que colide com parede e água. Ver os dois na
+        tela é o ponto: as hitboxes deixam de ser abstração.
+        """
+        corpo, pes = self.hitbox_entidade, self.hitbox_mapa
+        topo = min(corpo.top, self.rect.top) - 22
+        caixa = pygame.Rect(
+            min(corpo.left, pes.left) - 12, topo,
+            max(corpo.width, pes.width) + 24, max(corpo.bottom, pes.bottom) - topo,
+        )
+
+        camada = pygame.Surface(caixa.size, pygame.SRCALPHA)
+        deslocamento = (-caixa.x, -caixa.y)
+        pygame.draw.rect(camada, self.cor, corpo.move(deslocamento))
+        pygame.draw.rect(
+            camada, depuracao.COR_DA_HITBOX_DOS_PES, pes.move(deslocamento), 2
+        )
+        self._desenhar_municao(camada, deslocamento)
+
+        camada.set_alpha(round(255 * self.opacidade))
+        superficie.blit(camada, caixa)
+
+    def _desenhar_municao(self, superficie: pygame.Surface, deslocamento=(0, 0)) -> None:
+        lado, espaco = 5, 3
+        largura_total = regras.BALAS_MAXIMAS * (lado + espaco)
+        x = self.rect.centerx - largura_total // 2 + deslocamento[0]
+        y = self.rect.top - 5 + deslocamento[1]
         for i in range(regras.BALAS_MAXIMAS):
             cor = self.cor if i < self.balas else (70, 70, 70)
             pygame.draw.rect(
-                superficie, cor,
-                (x_inicial + i * (tamanho + espaco), y_inicial, tamanho, tamanho),
-                border_radius=1,
+                superficie, cor, (x + i * (lado + espaco), y, lado, lado), border_radius=1
             )
+
+    def _desenhar_acima_da_cabeca(self, superficie: pygame.Surface) -> None:
+        """Munição restante e etiqueta P1/P2, logo acima do sprite."""
+        self._desenhar_municao(superficie)
+        y_inicial = self.rect.top - 5
 
         texto = recursos.fonte(12, negrito=True).render(
             f"P{self.numero}", True, (255, 255, 255)
