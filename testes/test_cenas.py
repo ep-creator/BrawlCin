@@ -346,3 +346,79 @@ class TestControles:
         pares = {(p1, p2) for _, p1, p2 in LINHAS_DOS_JOGADORES}
         assert (TECLADO_P1.atirar, TECLADO_P2.atirar) in pares
         assert (TECLADO_P1.cima, TECLADO_P2.cima) in pares
+
+
+class TestCenaDeOpcoes:
+    """A base compartilhada pelos menus, exercitada sem passar por nenhum deles."""
+
+    @staticmethod
+    def _cena(registro=None):
+        from brawl.cenas.opcoes import CenaDeOpcoes, Opcao
+
+        registro = registro if registro is not None else []
+
+        class Falsa(CenaDeOpcoes):
+            titulo = "TÍTULO"
+
+            def __init__(self):
+                super().__init__([
+                    Opcao("UM", lambda: registro.append("um")),
+                    Opcao("DOIS", lambda: registro.append("dois")),
+                    Opcao("TRES", lambda: Sair()),
+                ])
+
+        return Falsa()
+
+    @pytest.mark.parametrize("tecla,esperado", [
+        (pygame.K_s, 1), (pygame.K_DOWN, 1),
+        (pygame.K_w, 2), (pygame.K_UP, 2),   # sobe do 0 e dá a volta
+    ])
+    def test_navega_pelos_dois_teclados_e_da_a_volta(self, tecla, esperado):
+        cena = self._cena()
+        cena.processar_evento(pygame.event.Event(pygame.KEYDOWN, key=tecla))
+        assert cena.indice == esperado
+
+    @pytest.mark.parametrize("confirma", [pygame.K_SPACE, pygame.K_RETURN])
+    def test_confirmar_executa_a_opcao_selecionada(self, confirma):
+        registro = []
+        cena = self._cena(registro)
+        cena.indice = 1
+        cena.processar_evento(pygame.event.Event(pygame.KEYDOWN, key=confirma))
+        assert registro == ["dois"]
+
+    def test_a_acao_pode_devolver_uma_transicao(self):
+        cena = self._cena()
+        cena.indice = 2
+        transicao = cena.processar_evento(
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_RETURN)
+        )
+        assert isinstance(transicao, Sair)
+
+    def test_esc_encerra_por_padrao(self):
+        transicao = self._cena().processar_evento(
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        )
+        assert isinstance(transicao, Sair)
+
+    def test_a_subclasse_pode_redefinir_o_esc(self):
+        """É o gancho de que a pausa e a confirmação vão precisar."""
+        cena = self._cena()
+        cena._ao_cancelar = lambda: Desempilhar()
+        transicao = cena.processar_evento(
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        )
+        assert isinstance(transicao, Desempilhar)
+
+    def test_tecla_qualquer_nao_faz_nada(self):
+        cena = self._cena()
+        assert cena.processar_evento(
+            pygame.event.Event(pygame.KEYDOWN, key=pygame.K_j)
+        ) is None
+        assert cena.indice == 0
+
+    def test_desenha_titulo_e_opcoes(self):
+        cena = self._cena()
+        tela = pygame.Surface((1920, 1080))
+        tela.fill((0, 0, 0))
+        cena.desenhar(tela)
+        assert pygame.transform.average_color(tela)[:3] != (0, 0, 0)
