@@ -9,6 +9,8 @@ from ..config import gameplay as regras
 
 
 class Item:
+    ordem_no_empate = 0
+
     def __init__(self, x: int, y: int, tipo: str):
         arquivo = regras.ITEM_ARQUIVOS.get(tipo)
         if arquivo is None:
@@ -22,6 +24,10 @@ class Item:
         self.imagem = recursos.imagem(
             "coletaveis", arquivo, tamanho=(regras.ITEM_TAMANHO, regras.ITEM_TAMANHO)
         )
+
+    @property
+    def profundidade(self) -> int:
+        return self.rect.bottom
 
     def desenhar(self, superficie: pygame.Surface) -> None:
         superficie.blit(self.imagem, self.rect)

@@ -24,10 +24,10 @@ BONUS_DANO_MAXIMO = 2
 
 # Posição inicial de cada jogador, em coordenadas de mundo, medida nos PÉS do
 # personagem (é onde ele pisa, e é o que as duas hitboxes ancoram).
-# Equivalem aos antigos (-1, 205) e (760, 205), que eram o canto superior
-# esquerdo do sprite.
-SPAWN_JOGADOR_1 = (19, 265)
-SPAWN_JOGADOR_2 = (780, 265)
+# Espelhadas na horizontal no mapa de 960x540, com 60 px de folga até a água
+# mais próxima e caminho livre entre elas.
+SPAWN_JOGADOR_1 = (90, 300)
+SPAWN_JOGADOR_2 = (870, 300)
 
 # Tamanho dos frames de sprite do jogador (largura, altura em pixels)
 TAMANHO_FRAME_JOGADOR = (40, 60)
@@ -62,7 +62,8 @@ TEMPO_RECARGA_MS = 3000
 # --- PROJÉTIL ---
 PROJETIL_RAIO = 6
 PROJETIL_VELOCIDADE = 10
-PROJETIL_ALCANCE_MAXIMO = 315
+# 40% da largura do mapa, a mesma proporção que 315 tinha no mapa de 791 px.
+PROJETIL_ALCANCE_MAXIMO = 380
 PROJETIL_DANO_BASE = 1
 
 # --- ITENS COLETÁVEIS ---

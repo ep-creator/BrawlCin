@@ -187,3 +187,54 @@ class TestLaco:
         """O mundo é desenhado em resolução nativa e escalado uma vez."""
         from brawl.cenas import partida as modulo
         assert "config_tela" not in open(modulo.__file__, encoding="utf-8").read()
+
+
+class TestOrdemDeDesenho:
+    """Vegetação, itens e jogadores são desenhados na ordem da base de cada um.
+
+    É o que faz a grama passar na frente de quem está atrás dela — e, de
+    brinde, faz os dois jogadores se sobreporem corretamente, em vez de o P2
+    aparecer sempre por cima só por ser desenhado depois.
+    """
+
+    def test_quem_pisa_mais_embaixo_e_desenhado_por_ultimo(self, partida):
+        partida.itens.clear()
+        partida.jogador1.teleportar_para(400, 400)
+        partida.jogador2.teleportar_para(420, 300)
+        ordem = partida._por_profundidade()
+        assert ordem.index(partida.jogador1) > ordem.index(partida.jogador2)
+
+        partida.jogador2.teleportar_para(420, 500)
+        ordem = partida._por_profundidade()
+        assert ordem.index(partida.jogador2) > ordem.index(partida.jogador1)
+
+    def test_a_profundidade_do_jogador_e_o_pe(self, partida):
+        partida.jogador1.teleportar_para(300, 250)
+        assert partida.jogador1.profundidade == 250
+
+    def test_vegetacao_ganha_do_jogador_no_empate(self, partida):
+        """Quem está pisando dentro da grama fica atrás dela."""
+        faixa = partida.mapa.faixas_de_vegetacao[0]
+        partida.itens.clear()
+        partida.jogador1.teleportar_para(400, faixa.profundidade)
+        ordem = partida._por_profundidade()
+        assert ordem.index(faixa) > ordem.index(partida.jogador1)
+
+    def test_todo_desenhavel_entra_na_ordenacao(self, partida):
+        esperado = 2 + len(partida.itens) + len(partida.mapa.faixas_de_vegetacao)
+        assert len(partida._por_profundidade()) == esperado
+
+    def test_a_vegetacao_saiu_do_fundo_achatado(self, partida):
+        """Se continuasse no fundo, nada poderia passar na frente dela."""
+        assert partida.mapa.faixas_de_vegetacao
+        assert len(partida.mapa.faixas_de_vegetacao) <= partida.mapa.tmx.height
+
+    def test_as_faixas_cobrem_as_mesmas_linhas_da_camada(self, partida):
+        from brawl.mundo.mapa import CAMADA_VEGETACAO
+        camada = next(c for c in partida.mapa.tmx.layers if c.name == CAMADA_VEGETACAO)
+        linhas_da_camada = {linha for _, linha, _ in camada.tiles()}
+        altura = partida.mapa.tmx.tileheight
+        linhas_das_faixas = {
+            (f.profundidade - altura) // altura for f in partida.mapa.faixas_de_vegetacao
+        }
+        assert linhas_das_faixas == linhas_da_camada
